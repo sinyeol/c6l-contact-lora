@@ -26,6 +26,13 @@ function evalNode(n) {
     const out = rt.translate(n.a); rt.delete();
     return out;
   }
+  if (n.t === 'frustum') {
+    const [wx, wy] = n.w0, cs = wasm.CrossSection.square([wx, wy], true);
+    const m = cs.extrude(n.z1 - n.z0, 0, 0, [(wx + 2 * n.off) / wx, (wy + 2 * n.off) / wy]);
+    cs.delete();
+    const out = m.translate([n.c[0], n.c[1], n.z0]); m.delete();
+    return out;
+  }
   const kids = n.c.map(evalNode);
   let out;
   if (n.t === 'add') out = Manifold.union(kids);

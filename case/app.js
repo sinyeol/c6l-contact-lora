@@ -1,20 +1,22 @@
-// 진입점 — 슬라이더 → core.model → manifold 메시 → 3D·SVG·표. 사이드바는 처음 한 번만 그린다(스크롤·포커스 유지).
+// 진입점 — 슬라이더·드래그 → core.model → manifold 메시 → 3D·SVG·표. 사이드바는 처음 한 번만 그린다(스크롤·포커스 유지).
 import * as THREE from './vendor/three.module.min.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
-import { DEFS, defaults, model, caseJson, C6L, PCB } from './core.js';
+import { DEFS, defaults, model, caseJson, C6L, PCB, USBC } from './core.js';
 import { initCsg, meshOf, stl } from './csg.js';
 
-const KEY = 'c6lcase.params.v1';
+const KEY = 'c6lcase.params.v2';
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const n1 = v => (+v).toFixed(1).replace(/\.0$/, '');
 const banner = msg => { $('banner').textContent = msg || ''; $('banner').hidden = !msg; };
+const DEF = Object.fromEntries(DEFS.map(d => [d[1], d]));
+const clamp = (k, v) => Math.min(DEF[k][4], Math.max(DEF[k][3], v));
 
 function loadParams() {
   const P = defaults();
   try {
     const s = JSON.parse(localStorage.getItem(KEY)) ?? {};
-    for (const d of DEFS) if (Number.isFinite(s[d[1]])) P[d[1]] = Math.min(d[4], Math.max(d[3], s[d[1]]));
+    for (const k in P) if (Number.isFinite(s[k])) P[k] = clamp(k, s[k]);
   } catch {}
   return P;
 }
@@ -41,9 +43,10 @@ function buildControls() {
     persist(); schedule();
   });
 }
-const syncControls = () => { for (const el of $('controls').querySelectorAll('input[data-key]')) el.value = P[el.dataset.key]; };
+const syncControls = (keys = Object.keys(P)) => { for (const k of keys) for (const el of $('controls').querySelectorAll(`[data-key="${k}"]`)) el.value = P[k]; };
 
 // ---- 3D ----
+const LIFT = { Lid: 1, REF_C6L: 1, REF_buttonPCB: 1, Cover: -1, REF_battery: -1 };   // 분해 방향(C6L·PCB 는 뚜껑, 배터리는 바닥과 함께)
 function createView(el) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -57,13 +60,13 @@ function createView(el) {
   const controls = new OrbitControls(camera, renderer.domElement);
   const paint = () => renderer.render(scene, camera);
   controls.addEventListener('change', paint);
-  const css = getComputedStyle(document.documentElement);
+  const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const ghost = color => new THREE.MeshStandardMaterial({ color, transparent: true, opacity: .5, depthWrite: false });
   const mats = {
-    Base: new THREE.MeshStandardMaterial({ color: css.getPropertyValue('--base').trim(), roughness: .6 }),
-    Lid: new THREE.MeshStandardMaterial({ color: css.getPropertyValue('--lid').trim(), roughness: .6 }),
-    REF_battery: new THREE.MeshStandardMaterial({ color: 0x8a8378, transparent: true, opacity: .3, depthWrite: false }),
-    REF_C6L: new THREE.MeshStandardMaterial({ color: 0x3d4652, transparent: true, opacity: .55, depthWrite: false }),
-    REF_buttonPCB: new THREE.MeshStandardMaterial({ color: 0x2e7d4f, transparent: true, opacity: .55, depthWrite: false }),
+    Lid: new THREE.MeshStandardMaterial({ color: css('--lid'), roughness: .6 }),
+    Body: new THREE.MeshStandardMaterial({ color: css('--base'), roughness: .6 }),
+    Cover: new THREE.MeshStandardMaterial({ color: css('--lidb'), roughness: .6 }),
+    REF_battery: ghost(0x8a8378), REF_C6L: ghost(0x3d4652), REF_buttonPCB: ghost(0x2e7d4f), REF_usbc: ghost(0x9a9a9a),
   };
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: .45 });
   const groups = {};
@@ -82,53 +85,49 @@ function createView(el) {
       g.add(new THREE.Mesh(geo, mats[name]));
       groups[name] = g; scene.add(g);
     },
-    show(fn, lift) {
-      for (const [n, g] of Object.entries(groups)) { g.visible = fn(n); g.position.z = n === 'Base' || n === 'REF_battery' ? 0 : lift; }   // C6L·PCB 는 뚜껑에 매달려 같이 뜬다
+    show(on, lift) {
+      for (const [n, g] of Object.entries(groups)) { g.visible = on(n); g.position.z = (LIFT[n] ?? 0) * lift; }
       paint();
     },
     fit(L) {
       if (fitted) return; fitted = true;
-      const [ox, oy, oz] = L.outer, c = new THREE.Vector3(L.IX / 2, L.IY / 2, oz / 2 - 2), d = Math.max(ox, oy) * 1.9;
+      const [ox, oy, oz] = L.outer, c = new THREE.Vector3(L.IX / 2, L.IY / 2, oz / 2 - 3), d = Math.max(ox, oy) * 1.7;
       controls.target.copy(c); camera.position.set(c.x - d * .55, c.y - d * .95, c.z + d * .8); controls.update();
     },
   };
 }
 let v3;
-const layerOn = n => n === 'Base' ? $('ly-base').checked : n === 'Lid' ? $('ly-lid').checked : $('ly-ref').checked;
+const layerOn = n => n.startsWith('REF') ? $('ly-ref').checked : $('ly-' + n.toLowerCase()).checked;
 const show3d = () => { $('lift-n').textContent = $('lift').value; v3?.show(layerOn, +$('lift').value); };
 
 // ---- 2D ----
-const W2 = () => P.WALL;
 function topSvg(L) {
-  const W = W2(), [ox, oy] = L.outer, pad = 12, fy = y => L.IY + W - y;        // SVG y 는 아래로 → 뒤집기
+  const W = P.WALL, [ox, oy] = L.outer, pad = 12, fy = y => L.IY + W - y;        // SVG y 는 아래로 → 뒤집기
   const rect = (r, cls, extra = '') => `<rect class="${cls}" x="${r[0]}" y="${fy(r[3])}" width="${r[2] - r[0]}" height="${r[3] - r[1]}" ${extra}/>`;
   const circ = (c, d, cls) => `<circle class="${cls}" cx="${c[0]}" cy="${fy(c[1])}" r="${d / 2}"/>`;
-  const win = ([x, y, wx, wy]) => [x - wx / 2, y - wy / 2, x + wx / 2, y + wy / 2];
-  const ri = Math.max(P.R_OUT - W, 0.3);
+  const lbl = (x, y, t) => `<text class="lbl" x="${x}" y="${fy(y) + 1}">${esc(t)}</text>`;
+  const ri = Math.max(P.R_OUT - W, 0.3), c = L.c6l, u = L.usbc;
   let s = `<svg viewBox="${-W - pad} ${-pad} ${ox + 2 * pad} ${oy + 2 * pad + 8}" role="img" aria-label="평면도">`;
   s += `<path class="wall" d="${rr(-W, -W, L.IX + W, L.IY + W, P.R_OUT, fy)} ${rr(0, 0, L.IX, L.IY, ri, fy)}"/>`;
-  s += rect([P.CLR, P.CLR, P.CLR + P.BAT_L, P.CLR + P.BAT_W], 'part bat');
-  const c = L.c6l;
-  s += rect([c[2], c[1], c[2] + P.GROVE_CLR, c[3]], 'zone');
-  s += rect(c, 'part c6l', 'rx="3"');
-  for (const [sy] of L.sma) s += rect([c[0] - C6L.SMA_LEN, sy - 3.2, c[0], sy + 3.2], 'part c6l');
-  s += rect(L.pcb, 'part pcb');
-  for (const k of L.keys) s += rect([k[0] - 6, k[1] - 6, k[0] + 6, k[1] + 6], 'part sw');
-  for (const st of L.stand) s += circ(st, P.STANDOFF_D, 'boss');
-  for (const b of L.boss) s += circ(b, P.BOSS_D, 'boss');
-  // 뚜껑 구멍(빨강 점선)
-  for (const w of [L.oled, L.ubtn]) s += rect(win(w), 'cut');
+  s += rect(L.bat, 'part bat') + lbl((L.bat[0] + L.bat[2]) / 2, L.bat[1] + 3, '배터리(격판 밑)');
+  for (const cc of L.cols) s += circ(cc, P.COL_D, 'boss') + circ(cc, P.MAG_D, 'mag');
+  s += `<g data-drag="usbc">${rect(u.flange, 'part usb')}${rect(u.slot, 'cut')}${u.holes.map(h => circ(h, 1.8, 'boss')).join('')}${lbl(u.c[0], u.flange[1] - 3.5, 'USB-C')}</g>`;
+  s += `<g data-drag="c6l">${rect([c[2], c[1], c[2] + P.GROVE_CLR, c[3]], 'zone')}${rect(c, 'part c6l', 'rx="3"')}`
+    + L.sma.map(([sy]) => rect([c[0] - C6L.SMA_LEN, sy - 3.2, c[0], sy + 3.2], 'part c6l')).join('')
+    + lbl((c[0] + c[2]) / 2 + 8, c[3] - 3, 'C6L') + '</g>';
+  s += `<g data-drag="pcb">${rect(L.pcb, 'part pcb')}${L.keysAll.map(k => rect([k[0] - 6, k[1] - 6, k[0] + 6, k[1] + 6], 'part sw')).join('')}`
+    + L.stand.map(st => circ(st, P.STANDOFF_D, 'boss')).join('') + lbl((L.pcb[0] + L.pcb[2]) / 2, L.pcb[3] - 2.5, '버튼 PCB') + '</g>';
+  // 뚜껑 구멍(빨강 점선) — 드래그를 가리지 않게 pointer-events 없음(.cut)
+  const [mx, my] = L.oled, wx = P.OLED_WX / 2, wy = P.OLED_WY / 2, o = L.maskOff;
+  s += rect([mx - wx - o, my - wy - o, mx + wx + o, my + wy + o], 'zone') + rect([mx - wx, my - wy, mx + wx, my + wy], 'cut');
+  s += circ(L.ubtn, P.UBTN_D, 'cut');
   for (const k of L.keys) s += circ(k, P.BTN_HOLE_D, 'cut');
-  for (const b of L.boss) s += circ(b, P.LID_HOLE_D, 'cut');
+  for (const b of L.cols) s += circ(b, P.LID_CB_D, 'cut');
   for (const p of L.pins) s += circ(p, P.PIN_D, 'cut');
-  // 벽 구멍
-  s += rect([L.usb_x - P.USB_W / 2, L.IY - 0.2, L.usb_x + P.USB_W / 2, L.IY + W + 0.2], 'cut');
-  if (P.BAT_PORT_W) { const py = L.IY / 2 + P.BAT_PORT_Y; s += rect([L.IX - 0.2, py - P.BAT_PORT_W / 2, L.IX + W + 0.2, py + P.BAT_PORT_W / 2], 'cut'); }
-  const lbl = (x, y, t) => `<text class="lbl" x="${x}" y="${fy(y) + 1}">${esc(t)}</text>`;
-  s += lbl((c[0] + c[2]) / 2, c[3] - 3, 'C6L') + lbl(L.oled[0], L.oled[1], 'OLED') + lbl(L.ubtn[0], L.ubtn[1] - 9, '버튼')
-    + lbl((L.pcb[0] + L.pcb[2]) / 2, L.pcb[3] - 2.5, '버튼 PCB') + lbl(L.usb_x, L.IY + W + 4, 'USB-C')
-    + lbl(c[2] + P.GROVE_CLR / 2, c[1] - 3, 'Grove') + lbl(-W - 5, L.sma[1][0] + 5, 'SMA');
-  s += dimH(-W, L.IX + W, -6, fy, `${n1(ox)}`) + '</svg>';
+  for (const [sy] of L.sma) s += rect([-W, sy - P.ANT_D / 2, -P.SMA_WALL, sy + P.ANT_D / 2], 'cut');
+  s += rect([L.IX / 2 - P.NOTCH_R, -W - 0.3, L.IX / 2 + P.NOTCH_R, -0.8], 'cut') + lbl(L.IX / 2, -W - 4, '손가락 홈(바닥)');
+  s += lbl(mx, my + wy + o + 1.5, 'OLED') + lbl(-W - 5, L.sma[1][0] + 6, '안테나');
+  s += dimH(-W, L.IX + W, -10, fy, `${n1(ox)}`) + '</svg>';
   return s;
 }
 // 둥근 사각형 path (fy 로 뒤집음)
@@ -140,41 +139,61 @@ function dimH(x0, x1, y, fy, t) {
   return `<g class="dim"><line x1="${x0}" y1="${Y}" x2="${x1}" y2="${Y}"/><text x="${(x0 + x1) / 2}" y="${Y + 4.5}" style="font-size:3.6px">${esc(t)} mm</text></g>`;
 }
 function secSvg(L) {
-  const W = W2(), [ox, , oz] = L.outer, pad = 10, fz = z => L.IH + P.LID_T - z, { IX, IH } = L;
+  const W = P.WALL, [ox, , oz] = L.outer, pad = 10, top = L.IH + P.LID_T, fz = z => top - z, { IX, IH, ZS, ZD0, ZD1 } = L;
   const rect = (x0, z0, x1, z1, cls) => `<rect class="${cls}" x="${x0}" y="${fz(z1)}" width="${x1 - x0}" height="${z1 - z0}"/>`;
   let s = `<svg viewBox="${-W - pad - 6} ${-pad} ${ox + 2 * pad + 6} ${oz + 2 * pad}" role="img" aria-label="단면도">`;
-  s += rect(-W, -P.FLOOR, IX + W, 0, 'wall') + rect(-W, 0, 0, IH, 'wall') + rect(IX, 0, IX + W, IH, 'wall');
-  s += rect(-W, IH, IX + W, IH + P.LID_T, 'lidp');
-  s += rect(P.CLR, 0, P.CLR + P.BAT_L, P.BAT_T, 'part bat');
-  const c = L.c6l, p = L.pcb, pz = IH - L.PCB_GAP - PCB.T;
+  s += rect(-W, -P.FLOOR, IX + W, 0, 'cover') + rect(-W, 0, 0, ZS, 'cover') + rect(IX, 0, IX + W, ZS, 'cover');
+  s += rect(-W, ZS, 0, IH, 'wall') + rect(IX, ZS, IX + W, IH, 'wall') + rect(0, ZD0, IX, ZD1, 'wall');
+  for (const [x] of [L.cols[0], L.cols[1]]) s += rect(x - P.COL_D / 2, 0, x + P.COL_D / 2, ZS, 'cover') + rect(x - P.COL_D / 2, ZS, x + P.COL_D / 2, IH, 'boss')
+    + rect(x - P.MAG_D / 2, ZS - P.MAG_T, x + P.MAG_D / 2, ZS + P.MAG_T, 'mag') + rect(x - P.INS3_HOLE / 2, IH - P.INS3_L, x + P.INS3_HOLE / 2, IH, 'mag');
+  // 뚜껑: OLED 자리는 MASK_T 로 얇게
+  const [mx] = L.oled, wx = P.OLED_WX / 2, o = L.maskOff;
+  s += `<path class="lidp" d="M${-W},${fz(IH)} H${mx - wx} V${fz(IH + P.MASK_T)} L${mx - wx - o},${fz(top)} H${-W} Z M${mx + wx},${fz(IH)} H${IX + W} V${fz(top)} H${mx + wx + o} L${mx + wx},${fz(IH + P.MASK_T)} Z"/>`;
+  s += rect(L.bat[0], 0, L.bat[2], P.BAT_T, 'part bat');
+  const c = L.c6l, p = L.pcb, pz = IH - L.PCB_GAP - PCB.T, u = L.usbc;
   s += rect(c[0], IH - C6L.T, c[2], IH, 'part c6l') + rect(c[0] - C6L.SMA_LEN, L.sma[0][1] - 3.2, c[0], L.sma[0][1] + 3.2, 'part c6l');
   s += rect(p[0], pz, p[2], pz + PCB.T, 'part pcb');
-  for (const [x] of L.keys) s += rect(x - 6, pz + PCB.T, x + 6, pz + PCB.T + 3.5, 'part sw') + rect(x - 1.75, pz + PCB.T, x + 1.75, pz + PCB.T + P.SW_H, 'part sw');
+  for (const [x] of L.keysAll) s += rect(x - 6, pz + PCB.T, x + 6, pz + PCB.T + 3.5, 'part sw') + rect(x - 1.75, pz + PCB.T, x + 1.75, pz + PCB.T + P.SW_H, 'part sw');
   for (const [x] of L.stand) s += rect(x - P.STANDOFF_D / 2, IH - L.PCB_GAP, x + P.STANDOFF_D / 2, IH, 'boss');
-  s += `<g class="dim"><line x1="${-W - 5}" y1="${fz(-P.FLOOR)}" x2="${-W - 5}" y2="${fz(IH + P.LID_T)}"/><text x="${-W - 7}" y="${fz(oz / 2 - P.FLOOR)}" style="font-size:3.6px" transform="rotate(-90 ${-W - 7} ${fz(oz / 2 - P.FLOOR)})">${n1(oz)} mm</text></g>`;
+  s += rect(u.flange[0], ZD0 - USBC.FT, u.flange[2], ZD0, 'part usb') + rect(u.body[0], ZD0, u.body[2], ZD0 - USBC.FT + USBC.BODY_L, 'part usb');
+  s += `<g class="dim"><line x1="${-W - 5}" y1="${fz(-P.FLOOR)}" x2="${-W - 5}" y2="${fz(top)}"/><text x="${-W - 7}" y="${fz(oz / 2 - P.FLOOR)}" style="font-size:3.6px" transform="rotate(-90 ${-W - 7} ${fz(oz / 2 - P.FLOOR)})">${n1(oz)} mm</text></g>`;
   return s + '</svg>';
 }
 
 function tables(m, meshes) {
-  const L = m.L, row = (k, v) => `<tr><td>${esc(k)}</td><td class="n">${v}</td></tr>`;
+  const L = m.L, row = (...v) => `<tr>${v.map((x, i) => `<td${i ? ' class="n"' : ''}>${x}</td>`).join('')}</tr>`;
+  const vol = n => meshes ? (meshes[n].volume / 1000).toFixed(1) : '…';
   $('t-summary').innerHTML = '<table>'
     + row('바깥 (가로×깊이×높이)', L.outer.map(n1).join(' × ') + ' mm')
-    + row('안쪽', [L.IX, L.IY, L.IH].map(n1).join(' × ') + ' mm')
+    + row('전자부 안쪽 높이', n1(L.IH - L.ZD1) + ' mm')
+    + row('배터리 칸 높이', n1(L.ZD0) + ' mm')
     + row('뚜껑 밑 ~ PCB 윗면', n1(L.PCB_GAP) + ' mm')
-    + (meshes ? row('출력 부피 통 / 뚜껑', `${(meshes.Base.volume / 1000).toFixed(1)} / ${(meshes.Lid.volume / 1000).toFixed(1)} cm³`) : '')
-    + row('뚜껑 나사', 'M3×8 셀프태핑 4개')
-    + row('PCB 나사', `M3×${Math.round(PCB.T + L.PCB_GAP - 1)} 셀프태핑 4개`)
+    + row('출력 부피 뚜껑 / 통 / 바닥', `${vol('Lid')} / ${vol('Body')} / ${vol('Cover')} cm³`)
     + '</table>';
-  $('t-warn').innerHTML = `<table><tr><th>수준</th><th>내용</th></tr>${m.warn.map(([lv, t]) => `<tr class="w-${lv}"><td class="lv ${lv}">${lv}</td><td>${esc(t)}</td></tr>`).join('')}</table>`;
+  const ins = (d, l, hole) => `M${d} 열삽입 인서트 L${n1(l)} <small>(구멍 Ø${n1(hole)})</small>`;
+  $('t-parts').innerHTML = '<table><tr><th>자리</th><th>부품</th><th class="n">수량</th></tr>'
+    + row('뚜껑 ↔ 통 (모서리 기둥 위)', `${ins(3, P.INS3_L, P.INS3_HOLE)} + M3×${L.bolts.lid} 소켓 볼트`, 4)
+    + row('버튼 PCB ↔ 뚜껑 기둥', `${ins(3, P.INS3S_L, P.INS3_HOLE)} + M3×${L.bolts.pcb} 볼트`, 4)
+    + row('USB-C 커넥터 ↔ 격판 밑', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2)
+    + row('바닥 ↔ 통 (기둥 아래)', `네오디뮴 자석 Ø${n1(P.MAG_D)}×${n1(P.MAG_T)} <small>(통·바닥 각 4, 극 맞춰 순간접착)</small>`, 8)
+    + row('C6L ↔ 뚜껑', '레고 핀(뚜껑에 일체) — 볼트 없음', 2)
+    + '</table>';
+  $('t-warn').innerHTML = m.warn.length ? `<table><tr><th>수준</th><th>내용</th></tr>${m.warn.map(([lv, t]) => `<tr class="w-${lv}"><td class="lv ${lv}">${lv}</td><td>${esc(t)}</td></tr>`).join('')}</table>`
+    : '<div class="empty lv ok">문제 없음</div>';
 }
 
-// ---- 재계산 ----
+// ---- 재계산: 2D·표는 바로, 3D(manifold)는 입력이 멈춘 뒤 ----
 let timer = 0, ready = false;
-const schedule = () => { clearTimeout(timer); timer = setTimeout(rebuild, 120); };
-function rebuild() {
+function draw2d() {
   const m = model(P);
   $('v-top').innerHTML = topSvg(m.L);
   $('v-sec').innerHTML = secSvg(m.L);
+  tables(m, cur?.meshes);
+  return m;
+}
+const schedule = () => { draw2d(); clearTimeout(timer); timer = setTimeout(rebuild, 150); };
+function rebuild() {
+  const m = model(P);
   let meshes = null;
   if (ready) {
     const t0 = performance.now();
@@ -187,8 +206,32 @@ function rebuild() {
     } catch (e) { banner('형상 계산 실패: ' + e.message); meshes = null; }
   }
   cur = { m, meshes };
-  tables(m, meshes);
+  draw2d();
 }
+
+// ---- 평면도 드래그 (C6L 은 SMA 가 벽에 붙어 있어야 해서 Y 만) ----
+const DRAG = { c6l: [null, 'C6L_Y'], pcb: ['PCB_CX', 'PCB_CY'], usbc: ['USBC_CX', 'USBC_CY'] };
+let drag = null;
+const svgPt = e => { const svg = $('v-top').querySelector('svg'), pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse()); return [pt.x, -pt.y]; };
+$('v-top').addEventListener('pointerdown', e => {
+  const g = e.target.closest('[data-drag]');
+  if (!g) return;
+  const [kx, ky] = DRAG[g.dataset.drag];
+  drag = { kx, ky, p0: svgPt(e), v0: [P[kx], P[ky]] };
+  $('v-top').setPointerCapture(e.pointerId);       // 컨테이너에 잡는다(SVG 는 매번 새로 그려진다)
+  e.preventDefault();
+});
+$('v-top').addEventListener('pointermove', e => {
+  if (!drag) return;
+  const [x, y] = svgPt(e), snap = v => Math.round(v * 2) / 2;
+  if (drag.kx) P[drag.kx] = clamp(drag.kx, snap(drag.v0[0] + x - drag.p0[0]));
+  P[drag.ky] = clamp(drag.ky, snap(drag.v0[1] + y - drag.p0[1]));
+  syncControls([drag.kx, drag.ky].filter(Boolean));
+  schedule();
+});
+const endDrag = () => { if (drag) { drag = null; persist(); } };
+$('v-top').addEventListener('pointerup', endDrag);
+$('v-top').addEventListener('pointercancel', endDrag);
 
 function download(name, data, type) {
   const url = URL.createObjectURL(new Blob([data], { type }));
@@ -197,13 +240,13 @@ function download(name, data, type) {
 }
 $('btn-reset').onclick = () => { P = defaults(); persist(); syncControls(); rebuild(); };
 $('btn-json').onclick = () => download('c6l-case.json', JSON.stringify(caseJson(P), null, 1), 'application/json');
-$('btn-stl-base').onclick = () => cur?.meshes && download('c6l_case_base.stl', stl(cur.meshes.Base), 'model/stl');
-$('btn-stl-lid').onclick = () => cur?.meshes && download('c6l_case_lid.stl', stl(cur.meshes.Lid, (x, y, z) => [x, -y, -z]), 'model/stl');   // X축 180° = 윗면이 바닥
-for (const id of ['ly-base', 'ly-lid', 'ly-ref', 'lift']) $(id).addEventListener('input', show3d);
+for (const n of ['Lid', 'Body', 'Cover'])     // 뚜껑은 X축 180°(윗면이 바닥), 통은 격판이 바닥에 오도록 그대로
+  $('btn-stl-' + n).onclick = () => cur?.meshes && download(`c6l_case_${n.toLowerCase()}.stl`, stl(cur.meshes[n], n === 'Lid' ? (x, y, z) => [x, -y, -z] : undefined), 'model/stl');
+for (const id of ['ly-lid', 'ly-body', 'ly-cover', 'ly-ref', 'lift']) $(id).addEventListener('input', show3d);
 
 buildControls(); syncControls();
 $('status').textContent = '형상 엔진 불러오는 중…';
-rebuild();
+draw2d();
 try {
   v3 = createView($('v-3d'));
   await initCsg();

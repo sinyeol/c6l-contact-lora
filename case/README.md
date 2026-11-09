@@ -1,36 +1,46 @@
 # C6L 버튼 케이스 설계툴
 
-Unit C6L + 카드형 배터리 + 3버튼 PCB(66.04×22.352)를 담는 3D 프린트 케이스. 슬라이더로 치수를 바꾸면 3D·평면·단면·경고가 바로 바뀌고, STL 을 브라우저에서 바로 받는다. Fusion 에서도 같은 형상을 B-rep 으로 만들 수 있다.
+Unit C6L + 배터리(99×65×12) + 3버튼 PCB(66.04×22.352) + 패널형 USB-C(JRC-C009)를 담는 3D 프린트 케이스. 슬라이더와 평면도 드래그로 바꾸면 3D·평면·단면·부품표·경고가 바로 바뀌고, STL 을 브라우저에서 바로 받는다. Fusion 에서도 같은 형상을 B-rep 으로 만들 수 있다.
 
-- 열기: `case/` 를 정적 서버로 연다(ES 모듈·WASM 이라 `file://` 로는 안 열림).
+- 상시 주소(109 사용자 서비스 `c6l-case-web`, 이 폴더를 그대로 서빙): http://192.168.1.109:8817/
+- 직접 열기(ES 모듈·WASM 이라 `file://` 로는 안 열림):
 
 ```bash
 python3 -m http.server 8817 -d case
 ```
 
-  → http://127.0.0.1:8817/
-- 구조: 아래층 = 배터리(바닥에 눕힘), 위층 = 뚜껑 밑에 매단 C6L(뒤 줄, OLED 창·사용자 버튼 창) + 버튼 PCB(앞 줄, 기둥 4개). 뚜껑은 M3 셀프태핑 4개.
-- 벽 구멍: -X 벽 SMA 홈 2개(위가 열림, 바깥 자리파기), 뒤 벽 USB-C, +X 벽 배터리 충전구.
+## 구조 (위 → 아래)
+
+| 부품 | 내용 |
+|---|---|
+| 뚜껑 `Lid` (3mm) | C6L(레고 핀 2개)·버튼 PCB(M3 인서트 기둥 4개)를 밑에 매단다. OLED 둘레는 1mm 로 얇고 45° 경사(화면 마스크), C6L 버튼은 Ø3 드라이버 구멍, 버튼 구멍은 양 끝 2개(가운데는 `MID_KEY`). 모서리 볼트 4개(머리 자리 파기) |
+| 통 `Body` | 벽 + 가운데 격판. 위 칸 = 전자부, 아래 칸 = 배터리. 모서리 기둥: 위 = M3 인서트, 아래 = 자석. -X 벽은 안테나 지름(Ø10)만큼 바깥에서 파서 1mm, SMA 홈은 위가 열려 뚜껑째 내려 끼운다. 격판에 패널형 USB-C 자리(몸통 구멍 + M2 인서트 2개, 플랜지는 배터리 쪽) |
+| 자석 바닥 `Cover` | 바닥판 + 벽(`SEAM_H`) + 모서리 기둥 자석 자리, 앞쪽 손가락 홈. 떼어 배터리를 넣고 뺀다 |
+
+- `SEAM_H` 최대(격판 밑까지)가 기본: 통은 격판을 바닥에 두고, 바닥은 트레이로 둘 다 서포트 없이 출력된다. 0 이면 평판 바닥(통의 격판은 서포트 필요).
+- 배터리는 -X 쪽, +X 쪽에 케이블 자리(`CABLE_BAY`) — USB-C 커넥터는 배터리 밖에 있어야 아래에서 케이블을 꽂을 수 있다(겹치면 오류).
+- 필요 인서트·볼트·자석 수량과 볼트 길이는 화면 "필요 부품" 표가 계산한다(기본: M3 L5.7 ×4, M3 L4 ×4, M2 L3 ×2, 자석 Ø6×3 ×8).
 
 ## 파일
 
 | 경로 | 내용 |
 |---|---|
-| `core.js` | 단일 진실: 파라미터(`DEFS`) → 배치 → 경고 → CSG 트리(box/cyl/add/sub/and) |
+| `core.js` | 단일 진실: 파라미터(`DEFS`) → 배치 → 경고 → CSG 트리(box/cyl/frustum/add/sub/and) |
 | `csg.js` | 트리 → manifold-3d 3.5.4 메시, 바이너리 STL |
-| `app.js`, `index.html`, `style.css` | 화면(플라이트 케이스 설계 앱과 같은 틀, three.js) |
-| `check.mjs` | `node case/check.mjs` — 기본값 오류 0, Base·Lid 부피, 슬라이더 양 끝 계산, `C6LCaseBuild/c6l-case.json` 갱신 |
-| `C6LCaseBuild/` | Fusion 스크립트. `c6l-case.json`(이 폴더 또는 ~/Downloads 중 최근 것)의 트리를 TemporaryBRepManager 로 계산 |
+| `app.js`, `index.html`, `style.css` | 화면(플라이트 케이스 설계 앱과 같은 틀, three.js). 평면도에서 C6L(Y)·PCB·USB-C 드래그 |
+| `check.mjs` | `node case/check.mjs` — 기본값 오류 0, 세 부품 부피, 슬라이더 양 끝 계산, `C6LCaseBuild/c6l-case.json` 갱신 |
+| `C6LCaseBuild/` | Fusion 스크립트. `c6l-case.json`(이 폴더 또는 ~/Downloads 중 최근 것)의 트리를 TemporaryBRepManager 로 계산, 사각뿔대는 테이퍼 압출 |
 
 ## Fusion
 
 1. 툴에서 **case.json 저장** → `c6l-case.json` (다운로드 폴더면 그대로 둬도 된다).
 2. `C6LCaseBuild/` 폴더를 맥 `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Scripts/` 에 복사.
-3. Fusion **Shift+S** → `C6LCaseBuild` 실행 → 새 문서에 Base·Lid·REF_ 부품, `out/` 에 STL.
+3. Fusion **Shift+S** → `C6LCaseBuild` 실행 → 새 문서에 Lid·Body·Cover·REF_ 부품, `out/` 에 STL.
 
 ## 치수 출처·가정
 
-- C6L: docs.m5stack.com U202 Model Size(24×56×8, SMA 간격 14, Ø5 레고 구멍 16 간격·끝에서 12). OLED·버튼·USB 위치는 도면 비례 측정.
+- C6L: docs.m5stack.com U202 Model Size(24×56×8, SMA 간격 14, Ø5 레고 구멍 16 간격·끝에서 12). OLED·버튼 위치는 도면 비례 측정.
 - 버튼 PCB: 첨부 도면(구멍 간격 59.944×16.764). 키 X 는 비례 측정(피치 20.32).
-- **가정값:** 배터리 88×56×9(신용카드 크기 보조배터리), 택트 스위치 12×12×7.3, SMA 중심 = 앞면에서 5mm. 실물로 확인해 바꿀 것.
+- USB-C 커넥터: 사진 치수(플랜지 20×7, 몸통 폭 9). 구멍 간격 16.5·몸통 두께 3.6·길이 5.3 은 사진 비례 추정.
+- 가정값: 택트 스위치 12×12×7.3, SMA 중심 = 앞면에서 5mm, 안테나 지름 10, 인서트 구멍(M3 Ø4.0, M2 Ø3.2)은 일반 권장값 — 쓰는 인서트 규격에 맞춰 바꿀 것.
 - Fusion 실행은 아직 검증하지 않았다(2026-11-09, Fusion MCP 미연결).

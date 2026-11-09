@@ -47,7 +47,7 @@ tr.w-info td { background: #eef5f9; color: var(--info); font-style: italic; }
 .card .tools { float: right; font-weight: 400; }
 .layers { display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: center; padding: 5px 10px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
 .layers label { white-space: nowrap; cursor: pointer; } .layers input[type=range] { width: 120px; vertical-align: middle; accent-color: var(--accent); }
-.exports { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.exports { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
 .note { font-size: 11px; color: var(--mute); margin-top: 8px; }
 .part { stroke: #333; stroke-width: 1; vector-effect: non-scaling-stroke; fill-opacity: .45; }
 .part.bat { fill: none; stroke-dasharray: 5 3; stroke: #8a8378; } .part.c6l { fill: #5b6b7d; } .part.pcb { fill: #3f8f5a; } .part.sw { fill: #222; fill-opacity: .6; }
@@ -56,3 +56,5 @@ tr.w-info td { background: #eef5f9; color: var(--info); font-style: italic; }
 .boss { fill: var(--base); fill-opacity: .8; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .zone { fill: none; stroke: #8a8378; stroke-dasharray: 2 3; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .lbl { font-size: 3.2px; fill: var(--ink); text-anchor: middle; pointer-events: none; }
+#v-top svg { touch-action: none; } [data-drag] { cursor: move; } [data-drag]:hover > .part { fill-opacity: .7; stroke: var(--sel); }
+.part.usb { fill: #b0b0b0; } .mag { fill: #6b6b6b; fill-opacity: .7; stroke: none; } .cover { fill: var(--lidb); fill-opacity: .45; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
