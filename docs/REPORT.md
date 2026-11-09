@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 |---|---|
-| 버전 | **v1.0** (2026-11-09, 펌웨어 소스 `efc603b`) |
+| 버전 | **v1.1** (2026-11-09, 펌웨어 소스 `991e756`) — v1.0 대비 꺼짐 판정 35→8초(하트비트·비콘), USB 연결 시 수신기 재부팅 수정 |
 | 구성 | M5Stack **Unit C6L** 26대 = 송신기 25대(ID 1~25) + 수신기 1대(ID 0) |
 | 무선 | LoRa **922.1MHz**(국내 KR920 채널), 송신기 → 수신기, ACK 로 상태를 되돌려 받아 동기화 |
 | 화면 | 수신기를 **USB 로 연결한 태블릿·PC 브라우저 앱**(인터넷 없이 동작), 필요하면 수신기 Wi-Fi 페이지도 사용 |
@@ -81,8 +81,8 @@
 
 | 파일 | 주소 | 용도 |
 |---|---|---|
-| `c6l-contact-lora-v1.0-full-0x0.bin` | `0x0` | **새 기기**(부트로더·파티션·앱 전체). NVS 까지 덮어써 ID 가 지워지므로 굽고 나서 ID 를 정합니다. |
-| `c6l-contact-lora-v1.0-app-0x10000.bin` | `0x10000` | **업데이트**(앱만). 저장된 ID 를 유지합니다. |
+| `c6l-contact-lora-v1.1-full-0x0.bin` | `0x0` | **새 기기**(부트로더·파티션·앱 전체). NVS 까지 덮어써 ID 가 지워지므로 굽고 나서 ID 를 정합니다. |
+| `c6l-contact-lora-v1.1-app-0x10000.bin` | `0x10000` | **업데이트**(앱만). 저장된 ID 를 유지합니다. |
 
 **크롬·엣지로 굽기(설치 없음):**
 1. https://espressif.github.io/esptool-js/ 를 엽니다.
@@ -229,11 +229,11 @@ PC 는 패키지의 `web/index.html` 을 바로 열어도 됩니다.
 
 ## 10. 파일 구성
 
-**패키지(`c6l-contact-lora-v1.0-20261109.zip`):**
+**패키지(`c6l-contact-lora-v1.1-20261109.zip`):**
 ```
 REPORT.md                                  이 문서
-firmware/c6l-contact-lora-v1.0-full-0x0.bin    새 기기용 전체 이미지 (0x0)
-firmware/c6l-contact-lora-v1.0-app-0x10000.bin 업데이트용 앱 이미지 (0x10000)
+firmware/c6l-contact-lora-v1.1-full-0x0.bin    새 기기용 전체 이미지 (0x0)
+firmware/c6l-contact-lora-v1.1-app-0x10000.bin 업데이트용 앱 이미지 (0x10000)
 firmware/flash_args.txt                    개별 이미지 주소·플래시 설정
 firmware/SHA256SUMS.txt                    이미지 해시
 web/                                       오프라인 브라우저 앱 (index.html·sw.js·manifest·아이콘·폴리필)
@@ -263,3 +263,8 @@ source/c6l-contact-lora-src.zip            소스 전체 (git archive)
 | `2d64662` | Pages 앱 실기기 시험 결과 |
 | `efc603b` | 국내 920MHz 규정 고정(빌드 검사·RSSI LBT·50ms 휴지), 오프라인 앱(PWA) |
 | `77a4b99` | README 정리 |
+| `040fef7`·`6787d7d` | v1.0 완료 보고서·트러블슈팅 |
+| `f66376b` | 꺼짐 판정 8초: ACK 없는 3초 하트비트 + 수신기 비콘 |
+| `f14e7a8` | 누름 재시도 중 하트비트 금지 |
+| `991e756` | 앱: RTS→DTR 순서로 수신기 재부팅 방지 |
+| `d750d3f` | 8초 실측·검증 기록 |
