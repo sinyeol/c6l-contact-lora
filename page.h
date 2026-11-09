@@ -2,6 +2,7 @@
 // 접점 상태 페이지 — 한 파일로 두 가지 방식:
 //  · 수신기 Wi-Fi(http://192.168.4.1) 로 열면 /s 를 300ms 마다 읽는다.
 //  · 그 밖(https·파일)으로 열면 수신기 USB 를 Web Serial 로 열어 "S [...]" 줄을 받는다.
+//    USB 모드에서는 [업데이트] 로 송신기 펌웨어를 일괄(한 대씩) 와이파이 업데이트할 수 있다.
 // web/index.html 은 이 문자열을 tools/export_web.py 로 꺼낸 사본이다(직접 고치지 말 것).
 const char PAGE[] = R"html(<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
@@ -15,8 +16,10 @@ const char PAGE[] = R"html(<!doctype html>
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.3 system-ui,sans-serif}
 header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px}
 h1{font-size:18px;margin:0}
-.r{display:flex;align-items:center;gap:10px}
+.r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 button{font:inherit;color:#fff;background:var(--btn);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}
+button.sub{background:#30363d}
 #g{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 16px}
 @media (max-width:700px){#g{grid-template-columns:repeat(3,1fr)}}
 .t{background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0}
@@ -31,11 +34,29 @@ button{font:inherit;color:#fff;background:var(--btn);border:0;border-radius:8px;
 .v{font-weight:700}
 .c{margin-left:auto;font-size:13px;opacity:.8}
 #st.bad{color:var(--warn)}
+dialog{background:var(--tile);color:var(--fg);border:1px solid var(--line);border-radius:12px;width:min(520px,calc(100% - 32px));padding:16px}
+dialog::backdrop{background:#0008}
+dialog h2{font-size:17px;margin:0 0 6px}
+dialog p{margin:0 0 10px}
+dialog .m{white-space:normal}
+#ul{margin:10px 0;max-height:240px;overflow:auto}
+#ul label{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)}
+#ul label .m{margin-left:auto}
+#ulg{max-height:140px;overflow:auto;background:#0d1117;padding:8px;border-radius:6px;font-size:12px;white-space:pre-wrap;margin:10px 0 0}
 </style></head><body>
-<header><h1>접점 상태</h1><div class="r"><span id="st">연결 중…</span><button id="cn" hidden>USB 연결</button></div></header>
+<header><h1>접점 상태</h1><div class="r"><span id="st">연결 중…</span><button id="ub" class="sub" hidden>업데이트</button><button id="cn" hidden>USB 연결</button></div></header>
 <main id="g"></main>
+<dialog id="ud"><form method="dialog">
+<h2>펌웨어 일괄 업데이트 <span id="ugw" class="m"></span></h2>
+<p class="m">앱 이미지(…-app-0x10000.bin)를 고르면 USB 로 수신기에 올리고, 수신기가 송신기를 한 대씩 와이파이로 업데이트합니다. 송신기는 업데이트하는 동안 잠깐 꺼짐으로 보입니다.</p>
+<input type="file" id="uf" accept=".bin">
+<div id="ui" class="m"></div>
+<div id="ul"></div>
+<div class="r"><button type="button" id="us">올리고 시작</button><button type="button" id="ua" class="sub" hidden>수신기도 업데이트</button><button class="sub" value="x">닫기</button></div>
+<pre id="ulg"></pre>
+</form></dialog>
 <script>
-const N=25,OFF=8,g=document.getElementById('g'),st=document.getElementById('st'),cn=document.getElementById('cn'),tiles=[];
+const N=25,OFF=8,$=id=>document.getElementById(id),g=$('g'),st=$('st'),cn=$('cn'),tiles=[];
 for(let i=1;i<=N;i++){
   const t=document.createElement('div');t.className='t off';
   t.innerHTML=`<div class="h"><b>${String(i).padStart(2,'0')}</b><span class="m">대기</span></div>`+
@@ -44,13 +65,13 @@ for(let i=1;i<=N;i++){
 }
 const ago=s=>s<60?s+'초':s<3600?Math.floor(s/60)+'분':Math.floor(s/3600)+'시간';
 const say=(txt,bad)=>{st.textContent=txt;st.className=bad?'bad':''};
-let last=0;
-function render(d){  // d = [null | {a,b,c1,c2,r}] × 25
-  let on=0;last=Date.now();
+let last=0,lastD=[];
+function render(d){  // d = [null | {a,b,c1,c2,r,v}] × 25
+  let on=0;last=Date.now();lastD=d;
   d.forEach((n,i)=>{
     const t=tiles[i],live=!!n&&n.a<OFF;on+=live;
     t.classList.toggle('off',!live);
-    t.querySelector('.m').textContent=!n?'대기':live?`${n.a}초 전 · ${n.r}dBm`:`끊김 ${ago(n.a)}`;
+    t.querySelector('.m').textContent=!n?'대기':live?`${n.a}초 전 · ${n.r}dBm${n.v?' · v'+n.v:''}`:`끊김 ${ago(n.a)}`;
     t.querySelectorAll('.p').forEach((p,k)=>{
       const c=live&&(n.b>>k&1)===1;  // 송신기가 꺼지면(끊김) 둘 다 OFF
       p.classList.toggle('on',c);
@@ -69,6 +90,15 @@ async function poll(){
 
 // ---- USB: Web Serial (안드로이드 구버전은 WebUSB 폴리필) ----
 const open=new Set();
+let gw=null,waiters=[];  // gw = S 줄을 주는 포트(수신기)
+function onLine(line,port){
+  if(line.startsWith('S [')){try{render(JSON.parse(line.slice(2)));gw=port;$('ub').hidden=false}catch(e){}return}
+  for(const w of waiters.slice())if(w.re.test(line)){waiters.splice(waiters.indexOf(w),1);w.ok(line)}
+  if(line.startsWith('U '))updLine(line);
+}
+const waitLine=(re,ms=20000)=>new Promise((ok,no)=>{const w={re,ok};waiters.push(w);
+  setTimeout(()=>{const i=waiters.indexOf(w);if(i>=0){waiters.splice(i,1);no(new Error('수신기 응답 없음'))}},ms)});
+async function gwWrite(d){const w=gw.writable.getWriter();try{await w.write(typeof d==='string'?new TextEncoder().encode(d+'\n'):d)}finally{w.releaseLock()}}
 async function serialApi(){
   if(navigator.serial)return navigator.serial;
   if(navigator.usb)return (await import('./web-serial-polyfill.js')).serial;  // 같은 폴더 사본 — 오프라인에서도 동작
@@ -90,15 +120,13 @@ async function run(port){
       if(done)break;
       buf+=value;
       let i;
-      while((i=buf.indexOf('\n'))>=0){
-        const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
-        if(line.startsWith('S ['))try{render(JSON.parse(line.slice(2)))}catch(e){}
-      }
+      while((i=buf.indexOf('\n'))>=0){onLine(buf.slice(0,i).trim(),port);buf=buf.slice(i+1)}
       if(buf.length>8192)buf='';
     }
   }catch(e){}
   try{await port.close()}catch(e){}
   open.delete(port);
+  if(gw===port){gw=null;$('ub').hidden=true}
   if(!open.size){say('USB 끊김 — 다시 꽂거나 [USB 연결]',true);cn.hidden=false}
 }
 async function usb(){
@@ -113,6 +141,60 @@ async function usb(){
   say(ports.length?'USB 연결 중…':'[USB 연결]을 눌러 수신기를 고르세요',!ports.length);
   setInterval(()=>{if(open.size&&last&&Date.now()-last>3000)say('수신기 응답 없음',true)},1000);
 }
+
+// ---- 펌웨어 일괄 업데이트 (USB 모드) ----
+let fw=null,ust={};
+const ulog=s=>{const p=$('ulg');p.textContent=(p.textContent+s+'\n').split('\n').slice(-60).join('\n');p.scrollTop=p.scrollHeight};
+function ulist(){  // 살아 있는 송신기 — 기본으로 버전이 다른 것만 고른다
+  const rows=[];
+  lastD.forEach((n,i)=>{
+    if(!n||n.a>=OFF)return;
+    const id=i+1,old=!n.v,need=!!fw&&!old&&n.v!==fw.ver;
+    const s=ust[id]||(old?'USB 로 한 번 굽기 필요':!fw?'':need?'대상':'최신');
+    rows.push(`<label><input type="checkbox" value="${id}"${need?' checked':''}${old?' disabled':''}> ${String(id).padStart(2,'0')} · v${n.v||'?'}<span class="m" id="ust${id}">${s}</span></label>`);
+  });
+  $('ul').innerHTML=rows.join('')||'<span class="m">살아 있는 송신기가 없습니다</span>';
+}
+function updLine(l){
+  const m=l.match(/^U (\d+) (.*)$/);
+  if(m){const t={cmd:'업데이트 중…',ok:'완료 ✓'}[m[2]]||m[2].replace(/^fail /,'실패: ');ust[m[1]]=t;const s=$('ust'+m[1]);if(s)s.textContent=t}
+  ulog(l);
+  if(l==='U done'){ulog('송신기 업데이트 끝 — 수신기도 바꾸려면 [수신기도 업데이트]');$('ua').hidden=false}
+}
+$('ub').onclick=async()=>{
+  ulist();$('ud').showModal();
+  try{const r=waitLine(/^id=0 /,3000);await gwWrite('?');const m=(await r).match(/fw=(\d+) store=(\d+)/);
+    $('ugw').textContent=m?`수신기 v${m[1]}${+m[2]?' · 보관본 v'+m[2]:''}`:''}catch(e){}
+};
+$('uf').onchange=async()=>{
+  fw=null;ust={};const f=$('uf').files[0];if(!f)return;
+  const b=new Uint8Array(await f.arrayBuffer()),m=new TextDecoder('latin1').decode(b).match(/C6LFW-VER=(\d+);/);
+  if(b[0]!==0xE9||!m||b.length>0x1F0000){$('ui').textContent='C6L 앱 이미지(…-app-0x10000.bin)를 고르세요. 전체 이미지(…-full-0x0.bin)나 v1.1 이하 파일은 안 됩니다.';ulist();return}
+  fw={b,ver:+m[1]};$('ui').textContent=`${f.name} · ${Math.round(b.length/1024)}KB · v${fw.ver}`;ulist();
+};
+$('us').onclick=async()=>{
+  if(!fw||!gw){$('ui').textContent=fw?'수신기가 연결돼 있지 않습니다':'먼저 파일을 고르세요';return}
+  const ids=[...$('ul').querySelectorAll('input:checked')].map(c=>c.value);
+  $('us').disabled=true;
+  try{
+    ulog(`수신기에 v${fw.ver} 올리는 중…`);
+    const rd=waitLine(/^fw (ready|err)/);await gwWrite(`fw ${fw.b.length} ${fw.ver}`);let l=await rd;
+    if(l.startsWith('fw err'))throw new Error(l);
+    const done=waitLine(/^fw (ok|err)/,180000);done.catch(()=>{});
+    for(let off=0;off<fw.b.length;off+=1024){
+      const end=Math.min(off+1024,fw.b.length),ack=waitLine(new RegExp(`^fw (ack ${end}$|err)`));
+      await gwWrite(fw.b.subarray(off,end));l=await ack;
+      if(l.startsWith('fw err'))throw new Error(l);
+      if(!(end%65536)||end===fw.b.length)$('ui').textContent=`수신기에 올리는 중 ${Math.round(end*100/fw.b.length)}%`;
+    }
+    l=await done;if(l.startsWith('fw err'))throw new Error(l);
+    $('ui').textContent=`수신기에 v${fw.ver} 보관됨`;ulog(l);
+    if(ids.length){ids.forEach(id=>{ust[id]='순서 기다림';const s=$('ust'+id);if(s)s.textContent=ust[id]});await gwWrite('upd '+ids.join(','))}
+    else{ulog('고른 송신기가 없습니다');$('ua').hidden=false}
+  }catch(e){ulog('실패: '+e.message)}
+  $('us').disabled=false;
+};
+$('ua').onclick=async()=>{ulog('수신기에 적용 — 재부팅합니다');await gwWrite('fw apply')};
 
 location.protocol==='http:'?poll():usb();
 // https 로 한 번 열면 서비스워커가 페이지·폴리필을 저장해 두어, 그 뒤로는 와이파이·인터넷 없이 열린다(홈 화면에 추가 권장)
