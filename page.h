@@ -32,7 +32,7 @@ button{font:inherit;color:#fff;background:var(--btn);border:0;border-radius:8px;
 <header><h1>접점 상태</h1><div class="r"><span id="st">연결 중…</span><button id="cn" hidden>USB 연결</button></div></header>
 <main id="g"></main>
 <script>
-const N=25,OFF=75,g=document.getElementById('g'),st=document.getElementById('st'),cn=document.getElementById('cn'),tiles=[];
+const N=25,OFF=35,g=document.getElementById('g'),st=document.getElementById('st'),cn=document.getElementById('cn'),tiles=[];
 for(let i=1;i<=N;i++){
   const t=document.createElement('div');t.className='t off';
   t.innerHTML=`<div class="h"><b>${String(i).padStart(2,'0')}</b><span class="m">대기</span></div>`+
@@ -49,7 +49,7 @@ function render(d){  // d = [null | {a,b,c1,c2,r}] × 25
     t.classList.toggle('off',!live);
     t.querySelector('.m').textContent=!n?'대기':live?`${n.a}초 전 · ${n.r}dBm`:`끊김 ${ago(n.a)}`;
     t.querySelectorAll('.p').forEach((p,k)=>{
-      const c=!!n&&(n.b>>k&1)===1;
+      const c=live&&(n.b>>k&1)===1;  // 송신기가 꺼지면(끊김) 둘 다 OFF
       p.classList.toggle('on',c);
       p.querySelector('.v').textContent=!n?'-':c?'ON':'OFF';
       p.querySelector('.c').textContent=n?'×'+n['c'+(k+1)]:'';

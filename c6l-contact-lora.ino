@@ -16,8 +16,8 @@
 constexpr uint32_t FREQ_HZ = 922100000;  // KR920 대역(920.9~923.3MHz) 안
 constexpr int8_t TX_DBM = 10;            // 안테나 3dBi 포함 EIRP 13dBm — 국내 규정 상한(14dBm) 안쪽
 constexpr uint8_t N_NODES = 25;
-constexpr uint32_t HEARTBEAT_MS = 30000;
-constexpr uint32_t OFFLINE_MS = 75000;   // page.h 의 OFF 와 같은 값
+constexpr uint32_t HEARTBEAT_MS = 10000;  // 25대 × (패킷+ACK 67ms) / 10초 ≈ 채널 17%
+constexpr uint32_t OFFLINE_MS = 35000;   // 하트비트 3번 놓치면 꺼짐 — page.h 의 OFF(초)와 같은 값
 constexpr uint32_t ACK_WAIT_MS = 300;
 const char *AP_SSID = "C6L-GW";
 const char *AP_PASS = "c6l-12345";       // 8자 이상
@@ -76,6 +76,7 @@ bool buttonDown() { return !(ioRead(0x0F) & 0x01); }
 struct Input { uint8_t pin; bool raw, stable; uint32_t since; uint8_t count; };
 Input ins[2] = {{PIN_IN1}, {PIN_IN2}};
 bool dirty = false;
+bool ready = false;  // 전원 켜면 STANDBY. 접점1 누르면 READY, 접점2 누르면 STANDBY 로 바뀌어 유지(래치)
 
 void pollInputs() {
   uint32_t now = millis();
@@ -84,12 +85,15 @@ void pollInputs() {
     if (closed != in.raw) { in.raw = closed; in.since = now; }
     else if (closed != in.stable && now - in.since >= 30) {
       in.stable = closed;
-      dirty = true;
-      if (closed) in.count++;  // 짧은 클릭이 전송 중에 열렸다 닫혀도 카운트로 남는다(255 다음 0)
+      if (closed) {  // 누를 때만: 상태 전환 + 횟수(255 다음 0). 뗄 때는 보낼 것이 없다
+        in.count++;
+        ready = &in == &ins[0];
+        dirty = true;
+      }
     }
   }
 }
-uint8_t bits() { return (ins[0].stable ? 1 : 0) | (ins[1].stable ? 2 : 0); }
+uint8_t bits() { return ready ? 1 : 2; }  // 1 = READY, 2 = STANDBY (수신기·앱이 이 비트를 그대로 표시)
 
 // ---- 송신기 ----
 uint8_t seq = 0, fails = 0;
@@ -241,7 +245,7 @@ void draw() {
     strcpy(l1, "ID --"); strcpy(l2, "hold 2s"); strcpy(l3, "to set ID");
   } else {
     snprintf(l1, sizeof l1, "ID %02u", myId);
-    snprintf(l2, sizeof l2, "1:%s 2:%s", ins[0].stable ? "ON" : "--", ins[1].stable ? "ON" : "--");
+    strcpy(l2, ready ? "READY" : "STANDBY");
     strcpy(l3, !radioOk ? "LoRa ERR" : linkOk ? "link OK" : "link --");
   }
   oled.clearBuffer();
