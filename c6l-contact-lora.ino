@@ -190,7 +190,8 @@ void nodeLoop() {
     Serial.println("link lost (비콘·ACK 없음)");
   }
   if (dirty) { dirty = false; pending = true; fails = 0; nextTry = now; }
-  if (pending && (int32_t)(now - nextTry) >= 0) {
+  if (pending) {  // 누름 재시도 중에는 하트비트를 끼워 넣지 않는다 (재시도가 상태를 싣고 있음)
+    if ((int32_t)(now - nextTry) < 0) return;
     if (sendOnce()) {
       pending = false; fails = 0;
       nextHb = millis() + HEARTBEAT_MS + random(0, 500);
