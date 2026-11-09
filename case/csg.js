@@ -33,6 +33,12 @@ function evalNode(n) {
     const out = m.translate([n.c[0], n.c[1], n.z0]); m.delete();
     return out;
   }
+  if (n.t === 'torus') {     // 원(반지름 r)을 x=R 에 두고 a0° 부터 90° 만 회전(바깥 모서리 1/4 이면 충분)
+    const c0 = wasm.CrossSection.circle(n.r), c1 = c0.translate([n.R, 0]), m = c1.revolve(0, 90), mr = m.rotate([0, 0, n.a0 ?? 0]);
+    c0.delete(); c1.delete(); m.delete();
+    const out = mr.translate(n.c); mr.delete();
+    return out;
+  }
   const kids = n.c.map(evalNode);
   let out;
   if (n.t === 'add') out = Manifold.union(kids);

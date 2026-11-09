@@ -1,5 +1,5 @@
 # C6L 버튼 케이스 — 설계툴(case/index.html)이 저장한 c6l-case.json 의 CSG 트리를 Fusion B-rep 으로 만든다.
-# 형상 규칙은 전부 case/core.js 에 있고, 여기서는 box/cyl/frustum/add/sub/and 만 해석한다.
+# 형상 규칙은 전부 case/core.js 에 있고, 여기서는 box/cyl/frustum/torus/add/sub/and 만 해석한다.
 # Fusion: Shift+S → C6LCaseBuild 실행 → 새 문서에 Lid·Body·Cover(+REF_ 부품), out/ 에 STL(조립 자세).
 # json: 이 폴더와 ~/Downloads 의 c6l-case*.json(브라우저가 붙이는 " (1)" 포함) 중 가장 최근 것.
 import os, json, math, glob
@@ -34,6 +34,8 @@ def build(case):
             return tbm.createCylinderOrCone(P(n['a']), n['r1'] / 10, P(n['b']), n['r2'] / 10)
         if t == 'frustum':
             return frustum(n)
+        if t == 'torus':
+            return tbm.createTorus(P(n['c']), adsk.core.Vector3D.create(0, 0, 1), n['R'] / 10, n['r'] / 10)
         kids = [ev(c) for c in n['c']]
         kind = {'add': BT.UnionBooleanType, 'sub': BT.DifferenceBooleanType, 'and': BT.IntersectionBooleanType}[t]
         out = kids[0]

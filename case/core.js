@@ -3,7 +3,7 @@
 // 좌표(mm): X=길이(+X 오른쪽), Y=깊이(+Y 뒤), Z=위. 바닥판 윗면(배터리가 놓이는 면)의 앞-왼쪽 안쪽 모서리가 원점.
 // 부품 3개: Lid(뚜껑, C6L·버튼 PCB 를 밑에 매단다) / Body(벽 + 가운데 격판, 위 칸 = 전자부, 아래 칸 = 배터리)
 //          / Cover(자석 바닥 — 떼어 배터리를 넣고 뺀다). 뚜껑-통은 모서리 기둥의 M3 열삽입 인서트로 볼트 체결.
-// 트리 노드: {t:'box',p:[x0,y0,z0,x1,y1,z1]} | {t:'cyl',a,b,r1,r2} | {t:'frustum',c:[x,y],z0,z1,w0:[wx,wy],off}
+// 트리 노드: {t:'box',p:[x0,y0,z0,x1,y1,z1]} | {t:'cyl',a,b,r1,r2} | {t:'frustum',c:[x,y],z0,z1,w0:[wx,wy],off} | {t:'torus',c:[x,y,z],R,r,a0} (Z축, a0° 부터 90° 만 있으면 됨 — Fusion 은 통째로 만든다)
 //          | {t:'add'|'sub'|'and',c:[…]} (sub = c[0] − 나머지). frustum = z0 에서 w0, z1 에서 사방 off 만큼 넓어지는 사각뿔대
 
 // Unit C6L (docs.m5stack.com U202 Model Size: 24×56×8, SMA 포함 62) — 위치는 Grove 끝 기준
@@ -21,7 +21,9 @@ export const DEFS = [
   ['케이스', 'LID_T', '뚜껑 두께', 2, 5, 0.1, 'mm', 3],
   ['케이스', 'DIV_T', '가운데 격판 두께', 1.2, 4, 0.1, 'mm', 2],
   ['케이스', 'FLOOR', '바닥판 두께', 1.2, 5, 0.1, 'mm', 2],
-  ['케이스', 'R_OUT', '바깥 모서리 R', 0.5, 10, 0.5, 'mm', 4],
+  ['케이스', 'R_OUT', '세로 모서리 R', 0.5, 20, 0.5, 'mm', 7],
+  ['케이스', 'TOP_R', '윗면 테두리 R (그립, 세로 R 의 절반까지)', 0, 10, 0.5, 'mm', 3.5],
+  ['케이스', 'BOT_R', '아랫면 테두리 R (그립, 세로 R 의 절반까지)', 0, 10, 0.5, 'mm', 3.5],
   ['케이스', 'CLR', '부품 여유(한 면)', 0, 2, 0.1, 'mm', 0.5],
   ['배터리·바닥', 'BAT_L', '배터리 길이', 40, 140, 0.5, 'mm', 99],
   ['배터리·바닥', 'BAT_W', '배터리 폭', 30, 100, 0.5, 'mm', 65],
@@ -93,7 +95,7 @@ export function layout(P) {
     sma: [-1, 1].map(s => [cy + s * C6L.SMA_DX, L.IH - P.SMA_FROM_FRONT]),
     pins: [-1, 1].map(s => [gx - C6L.LEGO, cy + s * C6L.LEGO_DX]),
     oled: [gx - C6L.OLED, cy], ubtn: [gx - C6L.UBTN, cy] });
-  L.maskOff = (P.LID_T - P.MASK_T) / Math.tan(P.MASK_SLOPE * Math.PI / 180);
+  L.maskOff = Math.max(P.LID_T - P.MASK_T, 0) / Math.tan(P.MASK_SLOPE * Math.PI / 180);
   // 버튼 PCB: 0° = 헤더 쪽이 뒤(+Y). PCB 로컬(u = 길이, v = 폭, v 큰 쪽 = 헤더)을 중심 기준으로 회전
   const a = P.PCB_ROT * Math.PI / 180, ca = Math.round(Math.cos(a)), sa = Math.round(Math.sin(a)), pc = [P.PCB_CX, P.PCB_CY];
   const tr = (u, v) => [pc[0] + (u - PCB.L / 2) * ca - (v - PCB.W / 2) * sa, pc[1] + (u - PCB.L / 2) * sa + (v - PCB.W / 2) * ca];
@@ -113,6 +115,7 @@ export function layout(P) {
   L.c6lUsb = [gx - C6L.USB, cy0 + C6L.W];
   L.plug = [L.c6lUsb[0] - 6, cy0 + C6L.W, L.c6lUsb[0] + 6, cy0 + C6L.W + P.PLUG_L];
   L.outer = [IX + 2 * W, IY + 2 * W, L.IH + P.LID_T + P.FLOOR];
+  L.rT = Math.min(P.TOP_R, P.R_OUT / 2); L.rB = Math.min(P.BOT_R, P.R_OUT / 2);   // 모서리 토러스 큰 반지름 ≥ 작은 반지름
   // 볼트 길이: 체결 두께 + 인서트 길이 − 0.5 이하의 표준 길이
   const std = n => [3, 4, 5, 6, 8, 10, 12, 16].filter(v => v <= n).pop() ?? 3;
   L.bolts = { lid: std(P.LID_T - P.LID_CB_H + P.INS3_L - 0.5), pcb: std(PCB.T + P.INS3S_L - 0.5), usbc: std(USBC.FT + P.INS2_L - 0.3) };
@@ -164,6 +167,15 @@ export function check(P, L) {
   if (P.PIN_LEN > C6L.T) warn('레고 핀이 C6L 두께(8mm)보다 김');
   info('ST003 모듈: 사진상 헤더 핀·POWER LED 가 위로 솟아 있어 뚜껑에 닿는다 — 핀을 빼고 선을 직접 납땜, LED 는 눕힐 것');
   info('ST003 모듈: 사진상 둥근 캡(약 Ø11.5)이 끼워져 있다 — 캡을 쓰면 버튼 구멍 Ø12.5, 스위치 높이는 PCB~캡 끝 실측값으로');
+  if (P.TOP_R > L.rT || P.BOT_R > L.rB) info(`테두리 R 은 세로 모서리 R 의 절반(${P.R_OUT / 2}mm)까지 — 그 값으로 맞춤. 더 둥글게 하려면 세로 R 을 키울 것`);
+  // 둥근 테두리가 안쪽 공간 모서리에 가장 가까운 곳의 벽 두께
+  const rim = (r, t) => r > W2 && r > t ? r - Math.hypot(r - W2, r - t) : Math.min(W2, t);
+  const W2 = P.WALL, tTop = rim(L.rT, P.LID_T), tBot = rim(L.rB, P.FLOOR);
+  if (tTop < 1.2) warn(`윗면 테두리 R 때문에 통 윗모서리 벽이 ${tTop.toFixed(1)}mm — 1.2 이상 권장`);
+  if (tBot < 1.2) warn(`아랫면 테두리 R 때문에 바닥 아랫모서리 벽이 ${tBot.toFixed(1)}mm — 1.2 이상 권장`);
+  // 뚜껑 볼트 머리 자리가 윗면 평평한 곳에 있는지(바깥 모서리 기준 거리 a,b)
+  const a = W2 + P.COL_D / 2, R = P.R_OUT, flat = a < R ? (R - L.rT) - Math.hypot(R - a, R - a) : a - L.rT;
+  if (flat < P.LID_CB_D / 2 + 0.2) warn('뚜껑 볼트 머리 자리가 둥근 테두리에 걸림 — 윗면 R 을 줄이거나 기둥을 키울 것');
   if (P.SEAM_H > L.ZD0) info(`바닥 벽 높이는 격판 밑(${L.ZD0}mm)까지만 — 그 값으로 맞춤`);
   if (L.ZS < L.ZD0) info('통이 격판 밑으로 내려옴 — 격판을 출력할 때 서포트가 필요하다(바닥 벽 높이를 최대로 하면 통은 격판을 바닥에 두고 서포트 없이 출력)');
   return W;
@@ -176,6 +188,18 @@ const add = (...c) => ({ t: 'add', c }), sub = (...c) => ({ t: 'sub', c }), and 
 const rbox = (x0, y0, z0, x1, y1, z1, r) => add(box(x0 + r, y0, z0, x1 - r, y1, z1), box(x0, y0 + r, z0, x1, y1 - r, z1),
   ...[x0 + r, x1 - r].flatMap(x => [y0 + r, y1 - r].map(y => cyl([x, y, z0], [x, y, z1], r))));
 const vcyl = ([x, y], z0, z1, r) => cyl([x, y, z0], [x, y, z1], r);
+// 세로 모서리 R + 윗면 테두리 rt + 아랫면 테두리 rb 인 판(rt, rb ≤ R/2). 곧은 테두리 = 눕힌 원기둥, 모서리 = 토러스
+function roundedSlab(x0, y0, z0, x1, y1, z1, R, rt, rb) {
+  const parts = [rbox(x0, y0, z0 + rb, x1, y1, z1 - rt, R)];
+  for (const [r, zc, zf] of [[rt, z1 - rt, z1], [rb, z0 + rb, z0]]) {
+    if (r <= 0) continue;
+    parts.push(rbox(x0 + r, y0 + r, Math.min(zc, zf), x1 - r, y1 - r, Math.max(zc, zf), R - r),
+      ...[y0 + r, y1 - r].map(y => cyl([x0 + R, y, zc], [x1 - R, y, zc], r)),
+      ...[x0 + r, x1 - r].map(x => cyl([x, y0 + R, zc], [x, y1 - R, zc], r)),
+      ...[[x1 - R, y1 - R, 0], [x0 + R, y1 - R, 90], [x0 + R, y0 + R, 180], [x1 - R, y0 + R, 270]].map(([x, y, a0]) => ({ t: 'torus', c: [x, y, zc], R: R - r, r, a0 })));
+  }
+  return add(...parts);
+}
 const rect = (r, z0, z1) => box(r[0], r[1], z0, r[2], r[3], z1);
 // 양끝이 둥근 긴 구멍(짧은 변 지름)
 const stadium = (r, z0, z1) => {
@@ -186,19 +210,23 @@ const stadium = (r, z0, z1) => {
 
 export function model(P) {
   const L = layout(P), warn = check(P, L);
-  const { IX, IY, IH, ZD0, ZD1, ZS } = L, W = P.WALL, ri = Math.max(P.R_OUT - W, 0.3), cr = P.COL_D / 2;
+  const { IX, IY, IH, ZD0, ZD1, ZS } = L, W = P.WALL, ri = Math.max(P.R_OUT - W, 0.3), cr = P.COL_D / 2, top = IH + P.LID_T;
+  // 바깥 외피 하나(세로 R + 윗면·아랫면 테두리 R)를 높이로 잘라 세 부품에 나눈다 → 곡면이 부품 사이로 이어진다
+  const env = roundedSlab(-W, -W, -P.FLOOR, IX + W, IY + W, top, P.R_OUT, L.rT, L.rB);
+  const slab = (z0, z1) => and(env, box(-W - 1, -W - 1, z0, IX + W + 1, IY + W + 1, z1));
+  const cav = (z0, z1) => rbox(0, 0, z0, IX, IY, z1, ri);
   // 모서리 기둥: 원기둥을 벽 쪽으로 밀어 겹쳐 벽과 한 덩어리로, 안쪽 공간으로 잘라낸다
   const column = ([x, y], z0, z1) => {
     const dx = x < IX / 2 ? -cr : cr, dy = y < IY / 2 ? -cr : cr;
-    return and(add(...[[0, 0], [dx, 0], [0, dy], [dx, dy]].map(([ox, oy]) => vcyl([x + ox, y + oy], z0, z1, cr))), box(0, 0, z0, IX, IY, z1));
+    return and(add(...[[0, 0], [dx, 0], [0, dy], [dx, dy]].map(([ox, oy]) => vcyl([x + ox, y + oy], z0, z1, cr))), cav(z0, z1));
   };
   const magnet = (c, zFace, up) => vcyl(c, up ? zFace - 1 : zFace - P.MAG_T - 0.2, up ? zFace + P.MAG_T + 0.2 : zFace + 1, P.MAG_D / 2 + 0.1);
 
   // Body: 벽(ZS~IH) + 격판 + 기둥(위 = M3 인서트, 아래 = 자석) + USB-C 자리
   const u = L.usbc;
   const body = sub(
-    add(sub(rbox(-W, -W, ZS, IX + W, IY + W, IH, P.R_OUT), rbox(0, 0, ZS - 1, IX, IY, IH + 1, ri)),
-      rbox(0, 0, ZD0, IX, IY, ZD1, ri),
+    add(sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
+      cav(ZD0, ZD1),
       ...L.cols.map(c => column(c, ZS, IH)),
       ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : [])),
     ...L.cols.map(c => vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2)),
@@ -213,19 +241,20 @@ export function model(P) {
   // Cover: 바닥판(+벽 ZS 높이) + 기둥 자석 자리 + 앞쪽 손가락 홈(바깥에서만, 안쪽 0.8 남김)
   const notch = cyl([IX / 2, -W - 1, ZS], [IX / 2, -0.8, ZS], P.NOTCH_R);
   const cover = ZS > 0.5
-    ? sub(add(sub(rbox(-W, -W, -P.FLOOR, IX + W, IY + W, ZS, P.R_OUT), rbox(0, 0, 0, IX, IY, ZS + 1, ri)), ...L.cols.map(c => column(c, 0, ZS))),
+    ? sub(add(sub(slab(-P.FLOOR - 1, ZS), cav(0, ZS + 1)), ...L.cols.map(c => column(c, 0, ZS))),
       ...L.cols.map(c => magnet(c, ZS, false)), notch)
-    : sub(rbox(-W, -W, -P.FLOOR, IX + W, IY + W, ZS, P.R_OUT), ...L.cols.map(c => magnet(c, ZS, false)), notch);
+    : sub(slab(-P.FLOOR - 1, ZS), ...L.cols.map(c => magnet(c, ZS, false)), notch);
 
   // Lid: 조립 위치(z=IH 위). 출력은 뒤집어서
-  const g = L.PCB_GAP, pin = P.PIN_D / 2, top = IH + P.LID_T;
-  const lid = sub(add(rbox(-W, -W, IH, IX + W, IY + W, top, P.R_OUT),
+  const g = L.PCB_GAP, pin = P.PIN_D / 2;
+  const lid = sub(add(slab(IH, top + 1),
       ...L.pins.flatMap(([x, y]) => [cyl([x, y, IH - P.PIN_LEN + 0.6], [x, y, IH], pin), cyl([x, y, IH - P.PIN_LEN], [x, y, IH - P.PIN_LEN + 0.6], pin - 0.5, pin)]),
       ...L.stand.map(s => vcyl(s, IH - g, IH, P.STANDOFF_D / 2))),
     ...L.stand.map(s => vcyl(s, IH - g - 1, IH - g + P.INS3S_L + 0.5, P.INS3_HOLE / 2)),
     box(L.oled[0] - P.OLED_WX / 2, L.oled[1] - P.OLED_WY / 2, IH - 1, L.oled[0] + P.OLED_WX / 2, L.oled[1] + P.OLED_WY / 2, top + 1),
     // OLED 마스크: 창 둘레는 MASK_T, 바깥으로 경사져 올라가 뚜껑 두께로
-    { t: 'frustum', c: L.oled, z0: IH + P.MASK_T, z1: top + 0.5, w0: [P.OLED_WX, P.OLED_WY], off: L.maskOff * (top + 0.5 - IH - P.MASK_T) / (P.LID_T - P.MASK_T) },
+    ...(P.MASK_T < P.LID_T ? [{ t: 'frustum', c: L.oled, z0: IH + P.MASK_T, z1: top + 0.5, w0: [P.OLED_WX, P.OLED_WY],
+      off: (top + 0.5 - IH - P.MASK_T) / Math.tan(P.MASK_SLOPE * Math.PI / 180) }] : []),
     vcyl(L.ubtn, IH - 1, top + 1, P.UBTN_D / 2),
     ...L.keys.map(k => vcyl(k, IH - 1, top + 1, P.BTN_HOLE_D / 2)),
     ...L.cols.flatMap(c => [vcyl(c, IH - 1, top + 1, M3_CLEAR / 2), vcyl(c, top - P.LID_CB_H, top + 1, P.LID_CB_D / 2)]));
