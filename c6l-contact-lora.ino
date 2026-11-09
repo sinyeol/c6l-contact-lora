@@ -33,7 +33,7 @@ constexpr uint8_t PI4IO = 0x43;          // IO 확장칩: P0 버튼, P5 LNA_EN, 
 constexpr uint8_t MAGIC = 0xC6, T_STATE = 1, T_ACK = 2;
 
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, RADIOLIB_NC, LORA_BUSY);  // NRST 는 확장칩 P7
-U8G2_SSD1306_64X48_ER_F_4W_HW_SPI oled(U8G2_R0, OLED_CS, OLED_DC, OLED_RST);
+U8G2_SSD1306_64X48_ER_F_4W_HW_SPI oled(U8G2_R2, OLED_CS, OLED_DC, OLED_RST);  // R2 = 180° (2026-11-09 사용자: R0 은 뒤집혀 보임)
 Preferences prefs;
 WebServer web(80);
 
