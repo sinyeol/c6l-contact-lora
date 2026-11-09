@@ -2,7 +2,8 @@
 
 Unit C6L + 배터리(99×65×12) + 3버튼 PCB(66.04×22.352) + 패널형 USB-C(JRC-C009)를 담는 3D 프린트 케이스. 슬라이더와 평면도 드래그로 바꾸면 3D·평면·단면·부품표·경고가 바로 바뀌고, STL 을 브라우저에서 바로 받는다. Fusion 에서도 같은 형상을 B-rep 으로 만들 수 있다.
 
-- 상시 주소(109 사용자 서비스 `c6l-case-web`, 이 폴더를 그대로 서빙): http://192.168.1.109:8817/
+- GitHub Pages(main): https://sinyeol.github.io/c6l-contact-lora/case/
+- LAN(109 사용자 서비스 `c6l-case-web`, 109 작업 폴더를 그대로 서빙 — 고친 즉시 보임): http://192.168.1.109:8817/
 - 직접 열기(ES 모듈·WASM 이라 `file://` 로는 안 열림):
 
 ```bash

@@ -114,6 +114,11 @@ arduino-cli upload  --fqbn esp32:esp32:esp32c6:CDCOnBoot=cdc,PartitionScheme=no_
 - **arduino-cli 없이 굽기:** `build/esp32.esp32.esp32c6/c6l-contact-lora.ino.merged.bin` 을 [esptool-js](https://espressif.github.io/esptool-js/) 로 주소 `0x0` 에 굽습니다.
 - **다운로드 모드:** 측면 버튼을 녹색 LED 가 빨강으로 바뀔 때까지 누르고 있다가 뗍니다.
 
+## 케이스 (3D 프린트)
+
+Unit C6L + 배터리 + 3버튼 모듈(ST003)을 담는 케이스 설계툴: **https://sinyeol.github.io/c6l-contact-lora/case/**
+치수·배치를 슬라이더와 드래그로 바꾸고 STL(뚜껑·통·자석 바닥)을 바로 받습니다. 구조·부품표·Fusion 사용법은 [case/README.md](case/README.md).
+
 ## 출처·주의
 
 - **핀·IO 확장칩 초기화:** Meshtastic `variants/esp32c6/m5stack_unitc6l` 기준입니다.
