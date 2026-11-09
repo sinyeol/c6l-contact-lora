@@ -31,6 +31,13 @@ M5Stack **Unit C6L** 26대로 만드는 접점 상태판입니다.
 
 공장 상태는 `ID --` 이며, 이때는 아무것도 보내지 않습니다.
 
+**시리얼로 정하기 (USB, 115200):** `id 0`(수신기) 또는 `id 1`~`id 25` 를 보내면 저장하고 재부팅합니다. 그 밖의 줄을 보내면 `id=… radio=… link=…` 상태를 돌려줍니다.
+
+**시리얼 로그:**
+- 송신기는 ACK 를 받을 때마다 `tx ok …` 를 찍고, 8번 연속 실패하면 `link lost` 를 찍습니다.
+- 수신기는 패킷을 받을 때마다 `rx id=… rssi=…` 를 찍습니다.
+- LoRa 초기화에 실패하면 `radio init try N: err=… i2c_fail=…` 를 찍고 최대 3번까지 다시 시도합니다.
+
 ## OLED 표시
 
 - **송신기:** `ID 07` / `1:ON 2:--` / `link OK`. 수신기 ACK 가 8번 연속 실패하면 `link --` 가 됩니다.
@@ -69,6 +76,11 @@ arduino-cli compile --fqbn esp32:esp32:esp32c6:CDCOnBoot=cdc,PartitionScheme=no_
 arduino-cli upload  --fqbn esp32:esp32:esp32c6:CDCOnBoot=cdc,PartitionScheme=no_fs -p /dev/ttyACM0 .
 ```
 
+- **USB 가 다른 PC 에 꽂혀 있을 때(Claude 세션):** Claude in Chrome 으로 그 PC 크롬에 esptool-js 를 엽니다.
+  - 처음 한 번은 Connect 를 누르고 사용자가 포트를 고릅니다. 그다음 `file_upload` 로 바이너리를 넣고 0x0 에 굽습니다.
+  - 권한을 받은 포트는 페이지에서 `import('https://cdn.jsdelivr.net/npm/esptool-js@0.7.1/+esm')` 로 불러온 `ESPLoader` 로 포트 선택 없이 다시 구울 수 있습니다.
+  - 합본 이미지는 NVS 까지 덮어쓰므로 굽고 나면 `id N` 을 다시 보냅니다.
+  - 리셋은 `setSignals({DTR:false, RTS:true})` 를 했다가 둘 다 false 로 돌립니다. DTR 이 켜진 채 리셋하면 다운로드 모드로 들어갑니다.
 - **arduino-cli 없이 굽기:** `build/esp32.esp32.esp32c6/c6l-contact-lora.ino.merged.bin` 을 [esptool-js](https://espressif.github.io/esptool-js/) 로 주소 `0x0` 에 굽습니다.
 - **다운로드 모드:** 측면 버튼을 녹색 LED 가 빨강으로 바뀔 때까지 누르고 있다가 뗍니다.
 
@@ -78,7 +90,10 @@ arduino-cli upload  --fqbn esp32:esp32:esp32c6:CDCOnBoot=cdc,PartitionScheme=no_
 - **RF 설정(TCXO 3.0V on DIO3, RF 스위치 = DIO2):** Stamp C6LoRa 회로도에서 가져왔습니다.
 - **안테나:** 동봉 LoRa 안테나는 868MHz 용입니다. 국내(920MHz 대)에서는 915~923MHz 안테나가 낫습니다.
 - **국내 규정:** 출력·LBT 조건은 현장에 쓰기 전에 다시 확인합니다.
-- **실기기 확인(2026-11-09, 1대):** 다음 항목이 실제 기기에서 정상이었습니다.
+- **수신기 실기기 확인(2026-11-09, 2번째 모듈):**
+  - 시리얼 `id 0` 으로 GW 로 설정하자 OLED 에 `GW` 가 표시됐습니다.
+  - 첫 부팅에서 `radio=-2` 가 한 번 났지만, 이후 리셋 6번은 모두 `radio=0` 이었습니다. 그래서 초기화 재시도를 넣었습니다.
+- **송신기 실기기 확인(2026-11-09, 1대):** 다음 항목이 실제 기기에서 정상이었습니다.
   - esptool-js 로 굽기
   - 부팅 로그 `radio=0`(IO 확장칩·SX1262·TCXO 3.0V·DIO2 RF 스위치 정상)
   - OLED(`U8G2_SSD1306_64X48_ER`) 표시

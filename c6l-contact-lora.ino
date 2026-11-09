@@ -42,13 +42,14 @@ void IRAM_ATTR onRadioIrq() { radioIrq = true; }
 
 uint8_t myId = 255;                      // 255 = 미설정, 0 = 수신기, 1~25 = 송신기
 bool radioOk = false;
+int radioErr = 0;                        // 마지막 초기화 결과 (RadioLib 코드)
 
 // ---- IO 확장칩 PI4IOE5V6408 ----
-void ioWrite(uint8_t reg, uint8_t v) {
+uint8_t ioWrite(uint8_t reg, uint8_t v) {  // 0 = 성공 (Wire.endTransmission 결과)
   Wire.beginTransmission(PI4IO);
   Wire.write(reg);
   Wire.write(v);
-  Wire.endTransmission();
+  return Wire.endTransmission();
 }
 uint8_t ioRead(uint8_t reg) {
   Wire.beginTransmission(PI4IO);
@@ -57,16 +58,17 @@ uint8_t ioRead(uint8_t reg) {
   Wire.requestFrom(PI4IO, (uint8_t)1);
   return Wire.read();
 }
-void ioInit() {  // Meshtastic c6l_init() 과 같은 레지스터 순서, 인터럽트 설정만 뺌
-  ioWrite(0x01, 0xFF); delay(10); ioRead(0x01);  // 칩 리셋
-  ioWrite(0x03, 0b11100000);  // P5~P7 출력
-  ioWrite(0x07, 0b00011100);  // P2~P4 하이임피던스
-  ioWrite(0x0D, 0b11100011);  // 풀업 선택
-  ioWrite(0x0B, 0b11100011);  // 풀업 사용(P0 버튼 포함)
-  ioWrite(0x05, 0b00000000);  // SX1262 리셋 유지
+int ioInit() {  // Meshtastic c6l_init() 과 같은 레지스터 순서, 인터럽트 설정만 뺌. 실패한 I2C 쓰기 수를 돌려준다
+  int bad = ioWrite(0x01, 0xFF) != 0; delay(10); ioRead(0x01);  // 칩 리셋
+  bad += ioWrite(0x03, 0b11100000) != 0;  // P5~P7 출력
+  bad += ioWrite(0x07, 0b00011100) != 0;  // P2~P4 하이임피던스
+  bad += ioWrite(0x0D, 0b11100011) != 0;  // 풀업 선택
+  bad += ioWrite(0x0B, 0b11100011) != 0;  // 풀업 사용(P0 버튼 포함)
+  bad += ioWrite(0x05, 0b00000000) != 0;  // SX1262 리셋 유지
   delay(100);
-  ioWrite(0x05, 0b11100000);  // 리셋 해제 + ANT_SW + LNA_EN
+  bad += ioWrite(0x05, 0b11100000) != 0;  // 리셋 해제 + ANT_SW + LNA_EN
   delay(10);
+  return bad;
 }
 bool buttonDown() { return !(ioRead(0x0F) & 0x01); }
 
@@ -123,8 +125,10 @@ void nodeLoop() {
   if (!pending || (int32_t)(now - nextTry) < 0) return;
   if (sendOnce()) {
     pending = false; fails = 0; linkOk = true; lastOk = millis();
+    Serial.printf("tx ok seq=%u bits=%u c=%u/%u\n", seq, bits(), ins[0].count, ins[1].count);
   } else {
     fails++;
+    if (fails == 8) Serial.println("link lost (ACK 8회 실패)");
     if (fails >= 8) linkOk = false;
     // 짧게 몇 번 다시 보내고, 계속 안 되면(수신기 꺼짐 등) 5~10초 간격으로 물러나 채널을 비운다
     nextTry = millis() + (fails < 8 ? random(50, 250) * fails : random(5000, 10000));
@@ -147,6 +151,7 @@ void gwLoop() {
     uint8_t ack[4] = {MAGIC, T_ACK, p[2], p[3]};
     radio.transmit(ack, sizeof ack);
     radioIrq = false;  // 송신 완료 인터럽트 무시
+    Serial.printf("rx id=%u seq=%u bits=%u c=%u/%u rssi=%d\n", p[2], p[3], p[4], p[5], p[6], nodes[p[2]].rssi);
   }
   radio.startReceive();
 }
@@ -190,6 +195,27 @@ void handleButton() {
   btnPrev = down;
 }
 
+// ---- 시리얼 "id N" (0~25, 0=GW) — 굽고 나서 콘솔로 ID 를 정할 때 ----
+void handleSerial() {
+  static char buf[12];
+  static uint8_t n = 0;
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c != '\n' && c != '\r') { if (n < sizeof buf - 1) buf[n++] = c; continue; }
+    buf[n] = 0; n = 0;
+    char *end = nullptr;
+    long v = strncmp(buf, "id ", 3) == 0 ? strtol(buf + 3, &end, 10) : -1;
+    if (v < 0 || v > N_NODES || end == buf + 3 || *end) {  // 그 밖의 줄: 현재 상태
+      if (buf[0]) Serial.printf("id=%u radio=%d link=%s | usage: id 0..25 (0=GW)\n", myId, radioErr, linkOk ? "ok" : "--");
+      continue;
+    }
+    prefs.putUChar("id", v);
+    Serial.printf("id=%ld saved, restarting\n", v);
+    delay(50);
+    ESP.restart();
+  }
+}
+
 // ---- OLED ----
 void draw() {
   char l1[12], l2[16], l3[16];
@@ -226,7 +252,6 @@ void setup() {
   for (auto &in : ins) in.raw = in.stable = digitalRead(in.pin) == LOW;  // 부팅 때 닫혀 있던 건 클릭으로 세지 않음
 
   Wire.begin(I2C_SDA, I2C_SCL);
-  ioInit();
   SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI);  // OLED·RadioLib 보다 먼저: 둘 다 SPI.begin() 을 다시 부르지만 이미 열려 있으면 무시된다
   oled.begin();
 
@@ -240,11 +265,19 @@ void setup() {
   cfg.codingRate = 5;
   cfg.power = TX_DBM;
   radio.tcxoVoltage = Voltage3V0;  // 회로도: DIO3 → VDD_OCXO 3.0V. 레귤레이터는 기본값 DC-DC(L2 실장)
-  int st = radio.begin(cfg);
-  if (st == RADIOLIB_ERR_NONE) st = radio.setDio2AsRfSwitch(true);  // RF 스위치 CTRL = DIO2
-  radioOk = st == RADIOLIB_ERR_NONE;
+  // 2026-11-09 새 모듈 첫 부팅에서 radio=-2(칩 못 찾음)가 한 번 났고 재부팅하자 정상 — 확장칩·SX1262 리셋부터 3번까지 다시 시도한다
+  for (int i = 1; i <= 3; i++) {
+    int ioBad = ioInit();
+    radioErr = radio.begin(cfg);
+    if (radioErr == RADIOLIB_ERR_NONE) radioErr = radio.setDio2AsRfSwitch(true);  // RF 스위치 CTRL = DIO2
+    if (radioErr == RADIOLIB_ERR_NONE) break;
+    Serial.printf("radio init try %d: err=%d i2c_fail=%d\n", i, radioErr, ioBad);
+    Wire.end();
+    Wire.begin(I2C_SDA, I2C_SCL);
+  }
+  radioOk = radioErr == RADIOLIB_ERR_NONE;
   radio.setDio1Action(onRadioIrq);
-  Serial.printf("c6l-contact-lora id=%u radio=%d\n", myId, st);
+  Serial.printf("c6l-contact-lora id=%u radio=%d\n", myId, radioErr);
 
   if (myId == 0) {
     WiFi.softAP(AP_SSID, AP_PASS);
@@ -257,6 +290,7 @@ void setup() {
 
 void loop() {
   handleButton();
+  handleSerial();
   if (radioOk && myId == 0) gwLoop();
   else if (radioOk && myId >= 1 && myId <= N_NODES) nodeLoop();
   static uint32_t lastDraw = 0;
