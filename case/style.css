@@ -58,3 +58,4 @@ tr.w-info td { background: #eef5f9; color: var(--info); font-style: italic; }
 .lbl { font-size: 3.2px; fill: var(--ink); text-anchor: middle; pointer-events: none; }
 #v-top svg { touch-action: none; } [data-drag] { cursor: move; } [data-drag]:hover > .part { fill-opacity: .7; stroke: var(--sel); }
 .part.usb { fill: #b0b0b0; } .mag { fill: #6b6b6b; fill-opacity: .7; stroke: none; } .cover { fill: var(--lidb); fill-opacity: .45; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.ctr { float: right; padding: 1px 6px; font-size: 11px; line-height: 1.4; }

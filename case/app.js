@@ -1,7 +1,7 @@
 // 진입점 — 슬라이더·드래그 → core.model → manifold 메시 → 3D·SVG·표. 사이드바는 처음 한 번만 그린다(스크롤·포커스 유지).
 import * as THREE from './vendor/three.module.min.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
-import { DEFS, defaults, model, caseJson, C6L, PCB, USBC } from './core.js';
+import { DEFS, defaults, model, layout, caseJson, C6L, PCB, USBC } from './core.js';
 import { initCsg, meshOf, stl } from './csg.js';
 
 const KEY = 'c6lcase.params.v2';
@@ -24,18 +24,27 @@ let P = loadParams(), cur = null;
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch {} };
 
 // ---- 사이드바 ----
+// 위치 항목 → 가운데 정렬 축(안쪽 공간 기준). C6L 은 SMA 가 벽에 붙어 있어 Y 만
+const CENTER = { C6L_Y: 'y', PCB_CX: 'x', PCB_CY: 'y', USBC_CX: 'x', USBC_CY: 'y' };
 function buildControls() {
   let h = '';
   for (const g of [...new Set(DEFS.map(d => d[0]))]) {
     h += `<fieldset><legend>${esc(g)}</legend>`;
     for (const [, key, label, min, max, step, unit, , opts] of DEFS.filter(d => d[0] === g))
       if (opts) h += `<div class="sel-row"><label for="n-${key}">${esc(label)}</label><select id="n-${key}" data-key="${key}">${opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>`;
-      else h += `<div class="row"><label for="n-${key}">${esc(label)} <span style="color:var(--mute)">${esc(unit)}</span></label>`
+      else h += `<div class="row"><label for="n-${key}">${esc(label)} <span style="color:var(--mute)">${esc(unit)}</span>${CENTER[key] ? `<button type="button" class="ctr" data-center="${key}">${CENTER[key].toUpperCase()} 가운데</button>` : ''}</label>`
         + `<input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" aria-label="${esc(label)}">`
         + `<input type="number" id="n-${key}" data-key="${key}" min="${min}" max="${max}" step="${step}"></div>`;
     h += '</fieldset>';
   }
   $('controls').innerHTML = h;
+  $('controls').addEventListener('click', e => {
+    const k = e.target.dataset?.center;
+    if (!k) return;
+    const L = layout(P);
+    P[k] = clamp(k, CENTER[k] === 'x' ? L.IX / 2 : L.IY / 2);
+    syncControls([k]); persist(); schedule();
+  });
   $('controls').addEventListener('input', e => {
     const k = e.target.dataset.key, v = parseFloat(e.target.value);
     if (!k || !Number.isFinite(v)) return;
