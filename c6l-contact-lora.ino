@@ -29,7 +29,7 @@ constexpr int OLED_CS = 6, OLED_DC = 18, OLED_RST = 15;  // SSD1306 64x48, LoRa 
 constexpr int I2C_SDA = 10, I2C_SCL = 8;
 constexpr uint8_t PI4IO = 0x43;          // IO 확장칩: P0 버튼, P5 LNA_EN, P6 ANT_SW, P7 SX_NRST
 
-// 패킷: STATE = MAGIC T_STATE id seq bits cnt1 cnt2 / ACK = MAGIC T_ACK id seq
+// 패킷: STATE = MAGIC T_STATE id seq bits cnt1 cnt2 / ACK = MAGIC T_ACK id seq bits(수신기가 저장한 상태를 되돌려 줌)
 constexpr uint8_t MAGIC = 0xC6, T_STATE = 1, T_ACK = 2;
 
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, RADIOLIB_NC, LORA_BUSY);  // NRST 는 확장칩 P7
@@ -97,6 +97,7 @@ uint8_t bits() { return ready ? 1 : 2; }  // 1 = READY, 2 = STANDBY (수신기·
 
 // ---- 송신기 ----
 uint8_t seq = 0, fails = 0;
+uint8_t syncedBits = 0;  // 수신기가 ACK 로 되돌려 준 상태 — OLED 는 이 값만 보여 준다(0 = 아직/끊김)
 uint32_t lastOk = 0, nextTry = 0;
 bool pending = true, linkOk = false;
 
@@ -110,8 +111,11 @@ bool sendOnce() {
     pollInputs();
     if (!radioIrq) continue;
     radioIrq = false;
-    uint8_t a[4];
-    if (radio.readData(a, sizeof a) == RADIOLIB_ERR_NONE && a[0] == MAGIC && a[1] == T_ACK && a[2] == myId && a[3] == seq) {
+    uint8_t a[5];
+    size_t len = radio.getPacketLength();  // readData 보다 먼저 불러야 한다
+    if (radio.readData(a, sizeof a) == RADIOLIB_ERR_NONE && len == sizeof a &&
+        a[0] == MAGIC && a[1] == T_ACK && a[2] == myId && a[3] == seq) {
+      syncedBits = a[4];
       radio.standby();
       return true;
     }
@@ -129,11 +133,11 @@ void nodeLoop() {
   if (!pending || (int32_t)(now - nextTry) < 0) return;
   if (sendOnce()) {
     pending = false; fails = 0; linkOk = true; lastOk = millis();
-    Serial.printf("tx ok seq=%u bits=%u c=%u/%u\n", seq, bits(), ins[0].count, ins[1].count);
+    Serial.printf("tx ok seq=%u bits=%u synced=%u c=%u/%u\n", seq, bits(), syncedBits, ins[0].count, ins[1].count);
   } else {
     fails++;
     if (fails == 8) Serial.println("link lost (ACK 8회 실패)");
-    if (fails >= 8) linkOk = false;
+    if (fails >= 8) { linkOk = false; syncedBits = 0; }  // 수신기와 못 맞추면 READY 를 띄우지 않는다
     // 짧게 몇 번 다시 보내고, 계속 안 되면(수신기 꺼짐 등) 5~10초 간격으로 물러나 채널을 비운다
     nextTry = millis() + (fails < 8 ? random(50, 250) * fails : random(5000, 10000));
   }
@@ -157,7 +161,7 @@ void gwLoop() {
   if (radio.readData(p, sizeof p) == RADIOLIB_ERR_NONE && len == sizeof p &&
       p[0] == MAGIC && p[1] == T_STATE && p[2] >= 1 && p[2] <= N_NODES) {
     nodes[p[2]] = {true, millis(), p[4], p[5], p[6], (int16_t)radio.getRSSI()};
-    uint8_t ack[4] = {MAGIC, T_ACK, p[2], p[3]};
+    uint8_t ack[5] = {MAGIC, T_ACK, p[2], p[3], nodes[p[2]].bits};  // 저장한 상태를 되돌려 줘 송신기가 동기화를 확인
     radio.transmit(ack, sizeof ack);
     radioIrq = false;  // 송신 완료 인터럽트 무시
     Serial.printf("rx id=%u seq=%u bits=%u c=%u/%u rssi=%d\n", p[2], p[3], p[4], p[5], p[6], nodes[p[2]].rssi);
@@ -231,6 +235,7 @@ void handleSerial() {
 // ---- OLED ----
 void draw() {
   char l1[12], l2[16], l3[16];
+  bool big2 = false;  // 송신기의 READY 만 큰 글씨 (다른 화면의 둘째 줄은 64px 에 안 들어감)
   if (editing) {
     if (editId == 0) strcpy(l1, "GW"); else snprintf(l1, sizeof l1, "ID %02u", editId);
     strcpy(l2, "SET tap=+1");
@@ -245,15 +250,17 @@ void draw() {
     strcpy(l1, "ID --"); strcpy(l2, "hold 2s"); strcpy(l3, "to set ID");
   } else {
     snprintf(l1, sizeof l1, "ID %02u", myId);
-    strcpy(l2, ready ? "READY" : "STANDBY");
+    strcpy(l2, syncedBits == 1 ? "READY" : "");  // 수신기가 READY 로 확인해 준 때만. STANDBY 는 비움
     strcpy(l3, !radioOk ? "LoRa ERR" : linkOk ? "link OK" : "link --");
+    big2 = true;
   }
   oled.clearBuffer();
   oled.setFont(u8g2_font_9x15_tr);
   oled.drawStr(0, 14, l1);
+  if (big2) oled.drawStr(0, 31, l2);
   oled.setFont(u8g2_font_5x8_tr);
-  oled.drawStr(0, 30, l2);
-  oled.drawStr(0, 42, l3);
+  if (!big2) oled.drawStr(0, 30, l2);
+  oled.drawStr(0, big2 ? 45 : 42, l3);
   oled.sendBuffer();
 }
 
