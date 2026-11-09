@@ -16,6 +16,6 @@ for (const [name, node] of Object.entries(m.bodies)) {
   console.log(`${name}: ${(me.volume / 1000).toFixed(1)} cm³, 삼각형 ${me.idx.length / 3}, genus ${me.genus}`);
 }
 // 슬라이더 양 끝에서도 트리 계산이 죽지 않는지
-for (const d of DEFS) for (const v of [d[3], d[4]]) for (const node of Object.values(model({ ...P, [d[1]]: v }).bodies)) meshOf(node);
+for (const d of DEFS) for (const v of d[8] ? d[8].map(o => o[0]) : [d[3], d[4]]) for (const node of Object.values(model({ ...P, [d[1]]: v }).bodies)) meshOf(node);
 console.log(`바깥 ${m.L.outer.map(v => v.toFixed(1)).join('×')} mm, 경고 ${m.warn.length}건 — ok`);
 writeFileSync(new URL('./C6LCaseBuild/c6l-case.json', import.meta.url), JSON.stringify(caseJson(P)));

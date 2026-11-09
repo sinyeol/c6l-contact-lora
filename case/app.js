@@ -28,8 +28,9 @@ function buildControls() {
   let h = '';
   for (const g of [...new Set(DEFS.map(d => d[0]))]) {
     h += `<fieldset><legend>${esc(g)}</legend>`;
-    for (const [, key, label, min, max, step, unit] of DEFS.filter(d => d[0] === g))
-      h += `<div class="row"><label for="n-${key}">${esc(label)} <span style="color:var(--mute)">${esc(unit)}</span></label>`
+    for (const [, key, label, min, max, step, unit, , opts] of DEFS.filter(d => d[0] === g))
+      if (opts) h += `<div class="sel-row"><label for="n-${key}">${esc(label)}</label><select id="n-${key}" data-key="${key}">${opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>`;
+      else h += `<div class="row"><label for="n-${key}">${esc(label)} <span style="color:var(--mute)">${esc(unit)}</span></label>`
         + `<input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" aria-label="${esc(label)}">`
         + `<input type="number" id="n-${key}" data-key="${key}" min="${min}" max="${max}" step="${step}"></div>`;
     h += '</fieldset>';
@@ -85,6 +86,7 @@ function createView(el) {
       g.add(new THREE.Mesh(geo, mats[name]));
       groups[name] = g; scene.add(g);
     },
+    prune(keep) { for (const n of Object.keys(groups)) if (!keep.includes(n)) { scene.remove(groups[n]); groups[n].traverse(o => o.geometry?.dispose()); delete groups[n]; } },
     show(on, lift) {
       for (const [n, g] of Object.entries(groups)) { g.visible = on(n); g.position.z = (LIFT[n] ?? 0) * lift; }
       paint();
@@ -111,12 +113,16 @@ function topSvg(L) {
   s += `<path class="wall" d="${rr(-W, -W, L.IX + W, L.IY + W, P.R_OUT, fy)} ${rr(0, 0, L.IX, L.IY, ri, fy)}"/>`;
   s += rect(L.bat, 'part bat') + lbl((L.bat[0] + L.bat[2]) / 2, L.bat[1] + 3, '배터리(격판 밑)');
   for (const cc of L.cols) s += circ(cc, P.COL_D, 'boss') + circ(cc, P.MAG_D, 'mag');
-  s += `<g data-drag="usbc">${rect(u.flange, 'part usb')}${rect(u.slot, 'cut')}${u.holes.map(h => circ(h, 1.8, 'boss')).join('')}${lbl(u.c[0], u.flange[1] - 3.5, 'USB-C')}</g>`;
+  if (u.mode === 0) s += `<g data-drag="usbc">${rect(u.flange, 'part usb')}${rect(u.slot, 'cut')}${u.holes.map(h => circ(h, 1.8, 'boss')).join('')}${lbl(u.c[0], u.flange[1] - 3.5, 'USB-C')}</g>`;
+  if (u.mode === 2) {
+    const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2;
+    s += `<g data-drag="usbc">${rect(r, 'part usb', `rx="${rr2}"`)}${lbl(u.c[0], r[1] - 3.5, '케이블 구멍')}</g>` + rect(L.plug, 'zone') + lbl(L.c6lUsb[0], L.plug[3] + 1, '플러그');
+  }
   s += `<g data-drag="c6l">${rect([c[2], c[1], c[2] + P.GROVE_CLR, c[3]], 'zone')}${rect(c, 'part c6l', 'rx="3"')}`
     + L.sma.map(([sy]) => rect([c[0] - C6L.SMA_LEN, sy - 3.2, c[0], sy + 3.2], 'part c6l')).join('')
     + lbl((c[0] + c[2]) / 2 + 8, c[3] - 3, 'C6L') + '</g>';
   s += `<g data-drag="pcb">${rect(L.pcb, 'part pcb')}${L.keysAll.map(k => rect([k[0] - 6, k[1] - 6, k[0] + 6, k[1] + 6], 'part sw')).join('')}`
-    + L.stand.map(st => circ(st, P.STANDOFF_D, 'boss')).join('') + lbl((L.pcb[0] + L.pcb[2]) / 2, L.pcb[3] - 2.5, '버튼 PCB') + '</g>';
+    + L.stand.map(st => circ(st, P.STANDOFF_D, 'boss')).join('') + circ(L.pcbHdr, 2.4, 'mag') + lbl((L.pcb[0] + L.pcb[2]) / 2, (L.pcb[1] + L.pcb[3]) / 2 - 1, '버튼 PCB') + '</g>';
   // 뚜껑 구멍(빨강 점선) — 드래그를 가리지 않게 pointer-events 없음(.cut)
   const [mx, my] = L.oled, wx = P.OLED_WX / 2, wy = P.OLED_WY / 2, o = L.maskOff;
   s += rect([mx - wx - o, my - wy - o, mx + wx + o, my + wy + o], 'zone') + rect([mx - wx, my - wy, mx + wx, my + wy], 'cut');
@@ -155,7 +161,8 @@ function secSvg(L) {
   s += rect(p[0], pz, p[2], pz + PCB.T, 'part pcb');
   for (const [x] of L.keysAll) s += rect(x - 6, pz + PCB.T, x + 6, pz + PCB.T + 3.5, 'part sw') + rect(x - 1.75, pz + PCB.T, x + 1.75, pz + PCB.T + P.SW_H, 'part sw');
   for (const [x] of L.stand) s += rect(x - P.STANDOFF_D / 2, IH - L.PCB_GAP, x + P.STANDOFF_D / 2, IH, 'boss');
-  s += rect(u.flange[0], ZD0 - USBC.FT, u.flange[2], ZD0, 'part usb') + rect(u.body[0], ZD0, u.body[2], ZD0 - USBC.FT + USBC.BODY_L, 'part usb');
+  if (u.mode === 0) s += rect(u.flange[0], ZD0 - USBC.FT, u.flange[2], ZD0, 'part usb') + rect(u.body[0], ZD0, u.body[2], ZD0 - USBC.FT + USBC.BODY_L, 'part usb');
+  if (u.mode === 2) s += rect(u.cable[0], ZD0, u.cable[2], ZD1, 'cut');
   s += `<g class="dim"><line x1="${-W - 5}" y1="${fz(-P.FLOOR)}" x2="${-W - 5}" y2="${fz(top)}"/><text x="${-W - 7}" y="${fz(oz / 2 - P.FLOOR)}" style="font-size:3.6px" transform="rotate(-90 ${-W - 7} ${fz(oz / 2 - P.FLOOR)})">${n1(oz)} mm</text></g>`;
   return s + '</svg>';
 }
@@ -174,7 +181,7 @@ function tables(m, meshes) {
   $('t-parts').innerHTML = '<table><tr><th>자리</th><th>부품</th><th class="n">수량</th></tr>'
     + row('뚜껑 ↔ 통 (모서리 기둥 위)', `${ins(3, P.INS3_L, P.INS3_HOLE)} + M3×${L.bolts.lid} 소켓 볼트`, 4)
     + row('버튼 PCB ↔ 뚜껑 기둥', `${ins(3, P.INS3S_L, P.INS3_HOLE)} + M3×${L.bolts.pcb} 볼트`, 4)
-    + row('USB-C 커넥터 ↔ 격판 밑', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2)
+    + (L.usbc.mode === 0 ? row('USB-C 커넥터 ↔ 격판 밑', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + row('바닥 ↔ 통 (기둥 아래)', `네오디뮴 자석 Ø${n1(P.MAG_D)}×${n1(P.MAG_T)} <small>(통·바닥 각 4, 극 맞춰 순간접착)</small>`, 8)
     + row('C6L ↔ 뚜껑', '레고 핀(뚜껑에 일체) — 볼트 없음', 2)
     + '</table>';
@@ -199,7 +206,9 @@ function rebuild() {
     const t0 = performance.now();
     try {
       meshes = {};
-      for (const [n, node] of [...Object.entries(m.bodies), ...Object.entries(m.refs)]) { meshes[n] = meshOf(node); v3.set(n, meshes[n]); }
+      const all = [...Object.entries(m.bodies), ...Object.entries(m.refs)];
+      for (const [n, node] of all) { meshes[n] = meshOf(node); v3.set(n, meshes[n]); }
+      v3.prune(all.map(([n]) => n));
       v3.fit(m.L); show3d();
       $('status').textContent = `계산 ${Math.round(performance.now() - t0)} ms`;
       banner('');

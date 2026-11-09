@@ -7,7 +7,7 @@
 //          | {t:'add'|'sub'|'and',c:[…]} (sub = c[0] − 나머지). frustum = z0 에서 w0, z1 에서 사방 off 만큼 넓어지는 사각뿔대
 
 // Unit C6L (docs.m5stack.com U202 Model Size: 24×56×8, SMA 포함 62) — 위치는 Grove 끝 기준
-export const C6L = { L: 56, W: 24, T: 8, SMA_DX: 7, SMA_LEN: 6, LEGO: 12, LEGO_DX: 8, OLED: 34.4, UBTN: 22.3 };
+export const C6L = { L: 56, W: 24, T: 8, SMA_DX: 7, SMA_LEN: 6, USB: 20.3, LEGO: 12, LEGO_DX: 8, OLED: 34.4, UBTN: 22.3 };
 // 3버튼 PCB (첨부 도면 66.04×22.352, 구멍 간격 59.944×16.764). 키 X 는 도면 비례 측정(피치 20.32)
 export const PCB = { L: 66.04, W: 22.352, T: 1.6, HX: (66.04 - 59.944) / 2, HY: (22.352 - 16.764) / 2,
   KEYS: [12.70, 33.02, 53.34], KEY_FROM_TOP: 12.5 };
@@ -15,7 +15,7 @@ export const PCB = { L: 66.04, W: 22.352, T: 1.6, HX: (66.04 - 59.944) / 2, HY: 
 export const USBC = { FL: 20, FH: 7, FT: 1, HOLE_P: 16.5, BODY_L: 5.3, BODY_W: 9, BODY_T: 3.6 };
 export const M3_CLEAR = 3.4;
 
-// [그룹, 키, 라벨, min, max, step, 단위, 기본값]
+// [그룹, 키, 라벨, min, max, step, 단위, 기본값, (선택지 [[값, 라벨]…] — 있으면 셀렉트)]
 export const DEFS = [
   ['케이스', 'WALL', '벽 두께', 1.6, 4, 0.1, 'mm', 2.4],
   ['케이스', 'LID_T', '뚜껑 두께', 2, 5, 0.1, 'mm', 3],
@@ -28,6 +28,7 @@ export const DEFS = [
   ['배터리·바닥', 'BAT_T', '배터리 두께', 3, 30, 0.5, 'mm', 12],
   ['배터리·바닥', 'BAT_GAP', '배터리 위 틈', 0, 5, 0.5, 'mm', 1],
   ['배터리·바닥', 'CABLE_BAY', '+X 쪽 케이블 자리', 0, 40, 0.5, 'mm', 16],
+  ['배터리·바닥', 'EXTRA_Y', '안쪽 깊이 추가(Y, PCB 세로 배치용)', 0, 40, 0.5, 'mm', 0],
   ['배터리·바닥', 'SEAM_H', '바닥 벽 높이 (0 = 평판, 최대 = 격판 밑까지)', 0, 40, 0.5, 'mm', 13],
   ['배터리·바닥', 'COL_D', '모서리 기둥 지름', 7, 14, 0.5, 'mm', 9.5],
   ['배터리·바닥', 'MAG_D', '자석 지름', 3, 10, 0.5, 'mm', 6],
@@ -48,17 +49,22 @@ export const DEFS = [
   ['C6L', 'GROVE_CLR', 'Grove 플러그 자리', 0, 25, 1, 'mm', 10],
   ['버튼 PCB', 'PCB_CX', '위치 X (중심, 드래그)', 0, 200, 0.5, 'mm', 62.5],
   ['버튼 PCB', 'PCB_CY', '위치 Y (중심, 드래그)', 0, 120, 0.5, 'mm', 12],
-  ['버튼 PCB', 'MID_KEY', '가운데 버튼 구멍 (0 = 없음)', 0, 1, 1, '', 0],
+  ['버튼 PCB', 'PCB_ROT', '회전', 0, 270, 90, '', 0, [[0, '0° (헤더 뒤)'], [90, '90°'], [180, '180° (헤더 앞)'], [270, '270°']]],
+  ['버튼 PCB', 'MID_KEY', '가운데 버튼 구멍', 0, 1, 1, '', 0, [[0, '없음 (KEY1·KEY3 만)'], [1, '있음']]],
   ['버튼 PCB', 'SW_H', '택트 스위치 높이(PCB~스템 끝)', 4, 15, 0.1, 'mm', 7.3],
   ['버튼 PCB', 'BTN_HOLE_D', '뚜껑 버튼 구멍', 3, 14, 0.5, 'mm', 8],
   ['버튼 PCB', 'BTN_PROUD', '스템이 뚜껑 위로 나옴', -2, 4, 0.1, 'mm', 0.5],
   ['버튼 PCB', 'UNDER_PCB', 'PCB 밑 리드 여유', 0, 6, 0.5, 'mm', 2.5],
   ['버튼 PCB', 'STANDOFF_D', 'PCB 기둥 지름(인서트)', 6, 10, 0.5, 'mm', 8],
-  ['USB-C 커넥터', 'USBC_CX', '위치 X (중심, 드래그)', 0, 200, 0.5, 'mm', 117.5],
-  ['USB-C 커넥터', 'USBC_CY', '위치 Y (중심, 드래그)', 0, 120, 0.5, 'mm', 33],
-  ['USB-C 커넥터', 'USBC_ROT', '방향 (0 = 길게 X, 90 = 길게 Y)', 0, 90, 90, '°', 90],
-  ['USB-C 커넥터', 'USBC_SLOT_W', '격판 구멍 길이(몸통 9)', 9, 12, 0.1, 'mm', 9.6],
-  ['USB-C 커넥터', 'USBC_SLOT_T', '격판 구멍 폭(몸통 두께)', 3, 6, 0.1, 'mm', 4.2],
+  ['USB-C 전원', 'USB_MODE', '배터리 → C6L 전원 경로', 0, 2, 1, '', 0, [[0, '격판에 패널형 USB-C 커넥터'], [2, '격판 구멍 — 배터리 케이블을 C6L 에 바로'], [1, '없음']]],
+  ['USB-C 전원', 'USBC_CX', '위치 X (중심, 드래그)', 0, 200, 0.5, 'mm', 117.5],
+  ['USB-C 전원', 'USBC_CY', '위치 Y (중심, 드래그)', 0, 120, 0.5, 'mm', 33],
+  ['USB-C 전원', 'USBC_ROT', '방향', 0, 90, 90, '', 90, [[0, '길게 X'], [90, '길게 Y']]],
+  ['USB-C 전원', 'USBC_SLOT_W', '커넥터: 격판 구멍 길이(몸통 9)', 9, 12, 0.1, 'mm', 9.6],
+  ['USB-C 전원', 'USBC_SLOT_T', '커넥터: 격판 구멍 폭(몸통 두께)', 3, 6, 0.1, 'mm', 4.2],
+  ['USB-C 전원', 'CBL_L', '케이블 구멍 길이(플러그 통과)', 8, 30, 0.5, 'mm', 14],
+  ['USB-C 전원', 'CBL_W', '케이블 구멍 폭', 4, 15, 0.5, 'mm', 8],
+  ['USB-C 전원', 'PLUG_L', 'C6L USB-C 옆 플러그 자리(ㄱ자 기준)', 5, 40, 0.5, 'mm', 12],
   ['인서트·볼트', 'INS3_HOLE', 'M3 인서트 구멍 지름', 3.6, 5, 0.05, 'mm', 4],
   ['인서트·볼트', 'INS3_L', 'M3 인서트 길이', 3, 8, 0.1, 'mm', 5.7],
   ['인서트·볼트', 'INS3S_L', 'PCB 기둥용 짧은 M3 인서트 길이', 2.5, 6, 0.1, 'mm', 4],
@@ -71,7 +77,7 @@ export const defaults = () => Object.fromEntries(DEFS.map(d => [d[1], d[7]]));
 
 export function layout(P) {
   const BAY = Math.max(P.COL_D, P.CABLE_BAY), W = P.WALL;
-  const L = { BAY, IX: P.COL_D + 2 * P.CLR + P.BAT_L + BAY, IY: P.BAT_W + 2 * P.CLR };
+  const L = { BAY, IX: P.COL_D + 2 * P.CLR + P.BAT_L + BAY, IY: P.BAT_W + 2 * P.CLR + P.EXTRA_Y };
   const { IX, IY } = L;
   L.bat = [P.COL_D + P.CLR, P.CLR, P.COL_D + P.CLR + P.BAT_L, P.CLR + P.BAT_W];
   L.ZD0 = P.BAT_T + P.BAT_GAP;                          // 격판 밑면
@@ -88,17 +94,24 @@ export function layout(P) {
     pins: [-1, 1].map(s => [gx - C6L.LEGO, cy + s * C6L.LEGO_DX]),
     oled: [gx - C6L.OLED, cy], ubtn: [gx - C6L.UBTN, cy] });
   L.maskOff = (P.LID_T - P.MASK_T) / Math.tan(P.MASK_SLOPE * Math.PI / 180);
-  // 버튼 PCB: 헤더 쪽이 뒤(+Y)
-  const px0 = P.PCB_CX - PCB.L / 2, py0 = P.PCB_CY - PCB.W / 2;
-  L.pcb = [px0, py0, px0 + PCB.L, py0 + PCB.W];
-  L.keysAll = PCB.KEYS.map(k => [px0 + k, py0 + PCB.W - PCB.KEY_FROM_TOP]);
+  // 버튼 PCB: 0° = 헤더 쪽이 뒤(+Y). PCB 로컬(u = 길이, v = 폭, v 큰 쪽 = 헤더)을 중심 기준으로 회전
+  const a = P.PCB_ROT * Math.PI / 180, ca = Math.round(Math.cos(a)), sa = Math.round(Math.sin(a)), pc = [P.PCB_CX, P.PCB_CY];
+  const tr = (u, v) => [pc[0] + (u - PCB.L / 2) * ca - (v - PCB.W / 2) * sa, pc[1] + (u - PCB.L / 2) * sa + (v - PCB.W / 2) * ca];
+  const hx = (ca ? PCB.L : PCB.W) / 2, hy = (ca ? PCB.W : PCB.L) / 2;
+  L.pcb = [pc[0] - hx, pc[1] - hy, pc[0] + hx, pc[1] + hy];
+  L.keysAll = PCB.KEYS.map(k => tr(k, PCB.W - PCB.KEY_FROM_TOP));
   L.keys = L.keysAll.filter((_, i) => i !== 1 || P.MID_KEY);
-  L.stand = [PCB.HX, PCB.L - PCB.HX].flatMap(x => [PCB.HY, PCB.W - PCB.HY].map(y => [px0 + x, py0 + y]));
+  L.stand = [PCB.HX, PCB.L - PCB.HX].flatMap(u => [PCB.HY, PCB.W - PCB.HY].map(v => tr(u, v)));
+  L.pcbHdr = tr(PCB.L / 2, PCB.W - 1.6);              // 헤더 위치(표시용)
   // USB-C: 격판 밑(배터리 쪽)에 플랜지, 몸통이 격판을 지나 위로
   const ax = P.USBC_ROT ? [0, 1] : [1, 0], c = [P.USBC_CX, P.USBC_CY];
   const r2 = (a, b) => P.USBC_ROT ? [c[0] - b / 2, c[1] - a / 2, c[0] + b / 2, c[1] + a / 2] : [c[0] - a / 2, c[1] - b / 2, c[0] + a / 2, c[1] + b / 2];
-  L.usbc = { c, flange: r2(USBC.FL, USBC.FH), slot: r2(P.USBC_SLOT_W, P.USBC_SLOT_T), body: r2(USBC.BODY_W, USBC.BODY_T),
+  L.usbc = { mode: P.USB_MODE, c, flange: r2(USBC.FL, USBC.FH), slot: r2(P.USBC_SLOT_W, P.USBC_SLOT_T), body: r2(USBC.BODY_W, USBC.BODY_T),
+    cable: r2(P.CBL_L, P.CBL_W), long: P.USBC_ROT ? 'y' : 'x',
     holes: [-1, 1].map(s => [c[0] + s * ax[0] * USBC.HOLE_P / 2, c[1] + s * ax[1] * USBC.HOLE_P / 2]) };
+  // C6L 자체 USB-C: +Y 쪽 긴 면, Grove 끝에서 20.3. 케이블 구멍 방식이면 그 옆에 플러그 자리가 필요
+  L.c6lUsb = [gx - C6L.USB, cy0 + C6L.W];
+  L.plug = [L.c6lUsb[0] - 6, cy0 + C6L.W, L.c6lUsb[0] + 6, cy0 + C6L.W + P.PLUG_L];
   L.outer = [IX + 2 * W, IY + 2 * W, L.IH + P.LID_T + P.FLOOR];
   // 볼트 길이: 체결 두께 + 인서트 길이 − 0.5 이하의 표준 길이
   const std = n => [3, 4, 5, 6, 8, 10, 12, 16].filter(v => v <= n).pop() ?? 3;
@@ -115,14 +128,24 @@ export function check(P, L) {
   if (L.PCB_GAP < 3.5) err(`PCB 가 뚜껑에 너무 붙음(${L.PCB_GAP.toFixed(1)}mm) — 스위치 몸통이 뚜껑에 닿는다. 스위치 높이·돌출을 확인`);
   const c6lZone = [L.c6l[0], L.c6l[1], L.grove_x + P.GROVE_CLR, L.c6l[3]];
   const cols = L.cols.map(c => sq(c, P.COL_D));
-  const parts = [['C6L(+Grove)', c6lZone], ['버튼 PCB', L.pcb], ['USB-C 커넥터', L.usbc.flange]];
+  const u = L.usbc, parts = [['C6L(+Grove)', c6lZone], ['버튼 PCB', L.pcb]];
+  if (u.mode === 0) parts.push(['USB-C 커넥터', u.flange]);
+  if (u.mode === 2) parts.push(['케이블 구멍', u.cable]);
   for (const [n, r] of parts) {
     if (!inside(r, L)) err(`${n} 가 안쪽을 벗어남`);
     if (cols.some(c => overlap(c, r))) err(`${n} 가 모서리 기둥과 겹침`);
   }
   if (overlap(c6lZone, L.pcb)) err('C6L 과 버튼 PCB 가 겹침');
-  for (const r of [c6lZone, L.pcb]) if (overlap(r, L.usbc.body)) warn('USB-C 커넥터 몸통이 C6L/PCB 밑에 있음 — 높이·배선 확인');
-  if (overlap(L.usbc.flange, L.bat)) err('USB-C 커넥터가 배터리 위에 있음 — 아래에서 케이블을 꽂을 자리가 없다. 케이블 자리(+X) 쪽으로');
+  if (u.mode === 0) {
+    for (const r of [c6lZone, L.pcb]) if (overlap(r, u.body)) warn('USB-C 커넥터 몸통이 C6L/PCB 밑에 있음 — 높이·배선 확인');
+    if (overlap(u.flange, L.bat)) err('USB-C 커넥터가 배터리 위에 있음 — 아래에서 케이블을 꽂을 자리가 없다. 케이블 자리(+X) 쪽으로');
+  }
+  if (u.mode === 2) {
+    if (overlap(u.cable, L.bat)) warn('케이블 구멍이 배터리 위에 있음 — 배터리 위 틈으로 케이블이 지나가야 한다');
+    if (!inside(L.plug, L) || cols.some(c => overlap(c, L.plug)) || overlap(L.plug, L.pcb))
+      err(`C6L USB-C 옆(+Y) 플러그 자리 ${P.PLUG_L}mm 가 막힘 — C6L 을 앞(−Y)으로 옮기거나 PCB 를 비킬 것`);
+  }
+  if (u.mode === 1) info('배터리 → C6L 전원 경로 없음(격판에 구멍 없음)');
   for (const k of L.keys) for (const s of L.stand)
     if (Math.hypot(k[0] - s[0], k[1] - s[1]) <= (P.BTN_HOLE_D + P.STANDOFF_D) / 2) { err('버튼 구멍이 PCB 기둥과 겹침'); break; }
   const mx = P.OLED_WX / 2 + L.maskOff;
@@ -139,6 +162,8 @@ export function check(P, L) {
   if (L.PCB_GAP + P.LID_T - 0.8 < P.INS3S_L + 0.5) err('PCB 기둥+뚜껑이 짧은 M3 인서트보다 짧음 — 인서트 길이·스위치 높이 확인');
   if (P.STANDOFF_D < P.INS3_HOLE + 2.4) warn('PCB 기둥 벽이 1.2mm 미만');
   if (P.PIN_LEN > C6L.T) warn('레고 핀이 C6L 두께(8mm)보다 김');
+  info('ST003 모듈: 사진상 헤더 핀·POWER LED 가 위로 솟아 있어 뚜껑에 닿는다 — 핀을 빼고 선을 직접 납땜, LED 는 눕힐 것');
+  info('ST003 모듈: 사진상 둥근 캡(약 Ø11.5)이 끼워져 있다 — 캡을 쓰면 버튼 구멍 Ø12.5, 스위치 높이는 PCB~캡 끝 실측값으로');
   if (P.SEAM_H > L.ZD0) info(`바닥 벽 높이는 격판 밑(${L.ZD0}mm)까지만 — 그 값으로 맞춤`);
   if (L.ZS < L.ZD0) info('통이 격판 밑으로 내려옴 — 격판을 출력할 때 서포트가 필요하다(바닥 벽 높이를 최대로 하면 통은 격판을 바닥에 두고 서포트 없이 출력)');
   return W;
@@ -152,6 +177,12 @@ const rbox = (x0, y0, z0, x1, y1, z1, r) => add(box(x0 + r, y0, z0, x1 - r, y1, 
   ...[x0 + r, x1 - r].flatMap(x => [y0 + r, y1 - r].map(y => cyl([x, y, z0], [x, y, z1], r))));
 const vcyl = ([x, y], z0, z1, r) => cyl([x, y, z0], [x, y, z1], r);
 const rect = (r, z0, z1) => box(r[0], r[1], z0, r[2], r[3], z1);
+// 양끝이 둥근 긴 구멍(짧은 변 지름)
+const stadium = (r, z0, z1) => {
+  const w = r[2] - r[0], h = r[3] - r[1], rr = Math.min(w, h) / 2, cx = (r[0] + r[2]) / 2, cy = (r[1] + r[3]) / 2;
+  const [a, b] = w >= h ? [[r[0] + rr, cy], [r[2] - rr, cy]] : [[cx, r[1] + rr], [cx, r[3] - rr]];
+  return add(w >= h ? box(a[0], r[1], z0, b[0], r[3], z1) : box(r[0], a[1], z0, r[2], b[1], z1), vcyl(a, z0, z1, rr), vcyl(b, z0, z1, rr));
+};
 
 export function model(P) {
   const L = layout(P), warn = check(P, L);
@@ -169,15 +200,15 @@ export function model(P) {
     add(sub(rbox(-W, -W, ZS, IX + W, IY + W, IH, P.R_OUT), rbox(0, 0, ZS - 1, IX, IY, IH + 1, ri)),
       rbox(0, 0, ZD0, IX, IY, ZD1, ri),
       ...L.cols.map(c => column(c, ZS, IH)),
-      ...u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6))),
+      ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : [])),
     ...L.cols.map(c => vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2)),
     ...L.cols.map(c => magnet(c, ZS, true)),
     ...L.sma.flatMap(([sy, sz]) => [            // -X 벽: 위가 열린 SMA 홈 + 바깥에서 안테나 지름만큼 파서 벽을 얇게
       cyl([-W - 1, sy, sz], [1, sy, sz], P.SMA_HOLE_D / 2),
       box(-W - 1, sy - P.SMA_HOLE_D / 2, sz, 1, sy + P.SMA_HOLE_D / 2, IH + 1),
       ...(P.SMA_WALL < W ? [cyl([-W - 1, sy, sz], [-P.SMA_WALL, sy, sz], P.ANT_D / 2)] : [])]),
-    rect(u.slot, ZD0 - 1, ZD1 + 1),
-    ...u.holes.map(h => vcyl(h, ZD0 - 1, ZD0 + P.INS2_L + 0.3, P.INS2_HOLE / 2)));
+    ...(u.mode === 0 ? [rect(u.slot, ZD0 - 1, ZD1 + 1), ...u.holes.map(h => vcyl(h, ZD0 - 1, ZD0 + P.INS2_L + 0.3, P.INS2_HOLE / 2))] : []),
+    ...(u.mode === 2 ? [stadium(u.cable, ZD0 - 1, ZD1 + 1)] : []));
 
   // Cover: 바닥판(+벽 ZS 높이) + 기둥 자석 자리 + 앞쪽 손가락 홈(바깥에서만, 안쪽 0.8 남김)
   const notch = cyl([IX / 2, -W - 1, ZS], [IX / 2, -0.8, ZS], P.NOTCH_R);
@@ -207,8 +238,8 @@ export function model(P) {
     REF_buttonPCB: add(rect(p, pz, pz + PCB.T),
       ...L.keysAll.map(([x, y]) => box(x - 6, y - 6, pz + PCB.T, x + 6, y + 6, pz + PCB.T + 3.5)),
       ...L.keysAll.map(k => vcyl(k, pz + PCB.T, pz + PCB.T + P.SW_H, 1.75))),
-    REF_usbc: add(rect(u.flange, ZD0 - USBC.FT, ZD0), rect(u.body, ZD0, ZD0 - USBC.FT + USBC.BODY_L)),
   };
+  if (u.mode === 0) refs.REF_usbc = add(rect(u.flange, ZD0 - USBC.FT, ZD0), rect(u.body, ZD0, ZD0 - USBC.FT + USBC.BODY_L));
   return { L, warn, bodies: { Lid: lid, Body: body, Cover: cover }, refs };
 }
 
