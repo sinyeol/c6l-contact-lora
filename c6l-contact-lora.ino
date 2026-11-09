@@ -21,7 +21,7 @@
 #endif
 
 // ---- 펌웨어 버전 — 올릴 때마다 1 씩. 하트비트에 실려 앱에 보이고, 앱은 .bin 안의 표식(FW_MARK)으로 버전을 읽는다 ----
-#define FW_VERSION 12
+#define FW_VERSION 14  // 12 = 와이파이 업데이트 도입, 13 = 실기기 시험판, 14 = 업데이트 중 재업로드 막음
 #define XSTR(x) STR(x)
 #define STR(x) #x
 const char FW_MARK[] = "C6LFW-VER=" XSTR(FW_VERSION) ";";
@@ -484,6 +484,7 @@ void command(char *s) {
     delay(100);
     ESP.restart();
   } else if (myId == 0 && !strncmp(s, "fw ", 3)) {
+    if (upd.active) { Serial.println("fw err busy"); return; }  // 송신기가 받아 가는 중인 보관본을 덮어쓰지 않는다
     unsigned long size = strtoul(s + 3, &end, 10);
     unsigned long ver = strtoul(end, nullptr, 10);
     fwBegin(size, ver);

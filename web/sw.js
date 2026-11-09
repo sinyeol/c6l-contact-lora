@@ -1,6 +1,6 @@
 // 접점 상태 앱 오프라인 캐시 — 저장본을 먼저 보여 주고, 네트워크가 있으면 뒤에서 새 버전으로 갈아 둔다.
 // 파일 목록을 바꾸면 CACHE 이름의 숫자를 올린다.
-const CACHE = 'c6l-app-v4';
+const CACHE = 'c6l-app-v5';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'web-serial-polyfill.js'];
 
 self.addEventListener('install', e => {

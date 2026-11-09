@@ -159,7 +159,7 @@ function updLine(l){
   const m=l.match(/^U (\d+) (.*)$/);
   if(m){const t={cmd:'업데이트 중…',ok:'완료 ✓'}[m[2]]||m[2].replace(/^fail /,'실패: ');ust[m[1]]=t;const s=$('ust'+m[1]);if(s)s.textContent=t}
   ulog(l);
-  if(l==='U done'){ulog('송신기 업데이트 끝 — 수신기도 바꾸려면 [수신기도 업데이트]');$('ua').hidden=false}
+  if(l==='U done'){ulog('송신기 업데이트 끝 — 수신기도 바꾸려면 [수신기도 업데이트]');$('ua').hidden=false;$('us').disabled=false}
 }
 $('ub').onclick=async()=>{
   ulist();$('ud').showModal();
@@ -175,7 +175,8 @@ $('uf').onchange=async()=>{
 $('us').onclick=async()=>{
   if(!fw||!gw){$('ui').textContent=fw?'수신기가 연결돼 있지 않습니다':'먼저 파일을 고르세요';return}
   const ids=[...$('ul').querySelectorAll('input:checked')].map(c=>c.value);
-  $('us').disabled=true;
+  if($('us').disabled)return;
+  $('us').disabled=true;$('ua').hidden=true;  // 송신기 업데이트가 끝날(U done) 때까지 다시 누르지 못하게
   try{
     ulog(`수신기에 v${fw.ver} 올리는 중…`);
     const rd=waitLine(/^fw (ready|err)/);await gwWrite(`fw ${fw.b.length} ${fw.ver}`);let l=await rd;
@@ -189,8 +190,8 @@ $('us').onclick=async()=>{
     }
     l=await done;if(l.startsWith('fw err'))throw new Error(l);
     $('ui').textContent=`수신기에 v${fw.ver} 보관됨`;ulog(l);
-    if(ids.length){ids.forEach(id=>{ust[id]='순서 기다림';const s=$('ust'+id);if(s)s.textContent=ust[id]});await gwWrite('upd '+ids.join(','))}
-    else{ulog('고른 송신기가 없습니다');$('ua').hidden=false}
+    if(ids.length){ids.forEach(id=>{ust[id]='순서 기다림';const s=$('ust'+id);if(s)s.textContent=ust[id]});await gwWrite('upd '+ids.join(','));return}  // U done 에서 다시 켬
+    ulog('고른 송신기가 없습니다');$('ua').hidden=false;
   }catch(e){ulog('실패: '+e.message)}
   $('us').disabled=false;
 };
