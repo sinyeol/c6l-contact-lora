@@ -36,8 +36,11 @@ def build(case):
             return frustum(n)
         if t == 'torus':
             return tbm.createTorus(P(n['c']), adsk.core.Vector3D.create(0, 0, 1), n['R'] / 10, n['r'] / 10)
+        if t not in ('add', 'sub', 'and'):   # 설계툴이 새 형상을 쓰는데 맥의 스크립트가 옛 버전일 때
+            raise RuntimeError("모르는 형상 '%s' — 이 스크립트가 case.json 보다 오래됐다. "
+                               "case/README.md 의 맥 설치 명령으로 C6LCaseBuild 를 다시 받을 것" % t)
         kids = [ev(c) for c in n['c']]
-        kind = {'add': BT.UnionBooleanType, 'sub': BT.DifferenceBooleanType, 'and': BT.IntersectionBooleanType}[t]
+        kind ={'add': BT.UnionBooleanType, 'sub': BT.DifferenceBooleanType, 'and': BT.IntersectionBooleanType}[t]
         out = kids[0]
         for k in kids[1:]:
             tbm.booleanOperation(out, k, kind)
