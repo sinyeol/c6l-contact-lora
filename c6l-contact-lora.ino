@@ -13,8 +13,16 @@
 #include "page.h"
 
 // ---- 설정 ----
-constexpr uint32_t FREQ_HZ = 922100000;  // KR920 대역(920.9~923.3MHz) 안
-constexpr int8_t TX_DBM = 10;            // 안테나 3dBi 포함 EIRP 13dBm — 국내 규정 상한(14dBm) 안쪽
+// 국내 920MHz 대역(KR920)만 쓴다 — 아래 static_assert 가 대역·채널·출력을 벗어나면 빌드를 막는다(실행 중 바꾸는 명령은 없음)
+//  채널 920.9~923.3MHz, 200kHz 간격 / EIRP 920.9~921.9MHz 10dBm, 922.1~923.3MHz 14dBm
+//  LBT: 송신 전 5ms 이상 들어 -65dBm 이하일 때만, 송신 4초 이내, 송신 뒤 50ms 이상 쉼 (krTransmit)
+constexpr uint32_t FREQ_HZ = 922100000;
+constexpr int8_t TX_DBM = 10;            // 모듈 출력
+constexpr int8_t ANT_GAIN_DBI = 3;       // 동봉 안테나 3dBi — 다른 안테나로 바꾸면 이 값을 고친다
+constexpr int8_t KR_MAX_EIRP = FREQ_HZ <= 921900000 ? 10 : 14;
+static_assert(FREQ_HZ >= 920900000 && FREQ_HZ <= 923300000 && (FREQ_HZ - 920900000) % 200000 == 0,
+              "국내 KR920 채널(920.9~923.3MHz, 200kHz 간격)만 쓸 수 있습니다");
+static_assert(TX_DBM + ANT_GAIN_DBI <= KR_MAX_EIRP, "국내 EIRP 상한을 넘습니다 (TX_DBM 또는 안테나 이득을 낮추세요)");
 constexpr uint8_t N_NODES = 25;
 constexpr uint32_t HEARTBEAT_MS = 10000;  // 25대 × (패킷+ACK 67ms) / 10초 ≈ 채널 17%
 constexpr uint32_t OFFLINE_MS = 35000;   // 하트비트 3번 놓치면 꺼짐 — page.h 의 OFF(초)와 같은 값
@@ -95,6 +103,31 @@ void pollInputs() {
 }
 uint8_t bits() { return ready ? 1 : 2; }  // 1 = READY, 2 = STANDBY (수신기·앱이 이 비트를 그대로 표시)
 
+// ---- 국내 LBT 송신: 직전 송신 뒤 50ms 쉼 → 5ms 이상 들어 -65dBm 이하면 송신 (송신기·수신기 공통) ----
+constexpr int ERR_CHANNEL_BUSY = -1000;
+uint32_t lastTxEndMs = 0;
+bool channelClear() {
+  radio.startReceive();
+  delayMicroseconds(500);  // 수신 모드 진입
+  for (uint32_t t0 = micros(); micros() - t0 < 5500;)
+    if (radio.getRSSI(false) > -65.0f) return false;  // 순간 RSSI
+  return true;
+}
+int krTransmit(const uint8_t *buf, size_t len, int tries) {
+  for (int i = 0; i < tries; i++) {
+    while (millis() - lastTxEndMs < 50) { pollInputs(); delay(1); }
+    if (channelClear()) {
+      int st = radio.transmit(buf, len);  // 7바이트 ≈ 36ms (4초 제한과 거리가 멂)
+      lastTxEndMs = millis();
+      radioIrq = false;  // 송신 완료도 DIO1 을 울린다
+      return st;
+    }
+    delay(random(5, 20));
+  }
+  radioIrq = false;
+  return ERR_CHANNEL_BUSY;
+}
+
 // ---- 송신기 ----
 uint8_t seq = 0, fails = 0;
 uint8_t syncedBits = 0;  // 수신기가 ACK 로 되돌려 준 상태 — OLED 는 이 값만 보여 준다(0 = 아직/끊김)
@@ -102,10 +135,8 @@ uint32_t lastOk = 0, nextTry = 0;
 bool pending = true, linkOk = false;
 
 bool sendOnce() {
-  if (radio.scanChannel() != RADIOLIB_CHANNEL_FREE) return false;  // 누가 송신 중이면 양보(LBT)
   uint8_t p[7] = {MAGIC, T_STATE, myId, ++seq, bits(), ins[0].count, ins[1].count};
-  if (radio.transmit(p, sizeof p) != RADIOLIB_ERR_NONE) return false;
-  radioIrq = false;  // CAD·송신 완료도 DIO1 을 울린다
+  if (krTransmit(p, sizeof p, 1) != RADIOLIB_ERR_NONE) return false;  // 채널이 차 있으면 이번 시도는 접고 물러난다
   radio.startReceive();
   for (uint32_t t0 = millis(); millis() - t0 < ACK_WAIT_MS;) {
     pollInputs();
@@ -162,8 +193,7 @@ void gwLoop() {
       p[0] == MAGIC && p[1] == T_STATE && p[2] >= 1 && p[2] <= N_NODES) {
     nodes[p[2]] = {true, millis(), p[4], p[5], p[6], (int16_t)radio.getRSSI()};
     uint8_t ack[5] = {MAGIC, T_ACK, p[2], p[3], nodes[p[2]].bits};  // 저장한 상태를 되돌려 줘 송신기가 동기화를 확인
-    radio.transmit(ack, sizeof ack);
-    radioIrq = false;  // 송신 완료 인터럽트 무시
+    krTransmit(ack, sizeof ack, 4);  // 쉼·LBT 지키며 최대 ~130ms 안에 (송신기 ACK 대기 300ms)
     Serial.printf("rx id=%u seq=%u bits=%u c=%u/%u rssi=%d\n", p[2], p[3], p[4], p[5], p[6], nodes[p[2]].rssi);
     pushState();  // 바뀐 상태를 USB 앱에 바로
     lastPush = millis();

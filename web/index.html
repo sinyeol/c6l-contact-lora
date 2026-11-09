@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111418">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
 <title>접점 상태</title>
 <style>
 :root{color-scheme:dark;--bg:#111418;--tile:#1c2128;--line:#2d333b;--fg:#e6edf3;--mut:#8b949e;--on:#238636;--stb:#da3633;--warn:#d29922;--btn:#1f6feb}
@@ -63,7 +66,7 @@ async function poll(){
 const open=new Set();
 async function serialApi(){
   if(navigator.serial)return navigator.serial;
-  if(navigator.usb)return (await import('https://cdn.jsdelivr.net/npm/web-serial-polyfill@1.0.15/+esm')).serial;
+  if(navigator.usb)return (await import('./web-serial-polyfill.js')).serial;  // 같은 폴더 사본 — 오프라인에서도 동작
   return null;
 }
 async function run(port){
@@ -104,4 +107,6 @@ async function usb(){
 }
 
 location.protocol==='http:'?poll():usb();
+// https 로 한 번 열면 서비스워커가 페이지·폴리필을 저장해 두어, 그 뒤로는 와이파이·인터넷 없이 열린다(홈 화면에 추가 권장)
+if(location.protocol==='https:'&&'serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 </script></body></html>
