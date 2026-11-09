@@ -107,6 +107,7 @@ arduino-cli upload  --fqbn esp32:esp32:esp32c6:CDCOnBoot=cdc,PartitionScheme=no_
   - 송신기 1번 `tx ok`/`link=ok`, 수신기 `rx id=1`(ACK 포함)
   - 접점 입력이 `bits=1 c=1/2` 로 수신기까지 전달
   - 사무실 PC 크롬에서 USB 앱으로 01번 READY ON 표시
+  - GitHub Pages 주소(https://sinyeol.github.io/c6l-contact-lora/web/)에서 포트 권한을 받은 뒤 자동 연결, 래치(1→2→1 누름 → READY 유지)가 앱에 초록 READY 로 표시, 송신기 ACK `synced=` 로 동기화 확인
 - **수신기 실기기 확인(2026-11-09, 2번째 모듈):**
   - 시리얼 `id 0` 으로 GW 로 설정하자 OLED 에 `GW` 가 표시됐습니다.
   - 첫 부팅에서 `radio=-2` 가 한 번 났지만, 이후 리셋 6번은 모두 `radio=0` 이었습니다. 그래서 초기화 재시도를 넣었습니다.
