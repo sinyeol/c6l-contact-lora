@@ -74,7 +74,10 @@ async function run(port){
   open.add(port);
   try{
     await port.open({baudRate:115200});
-    await port.setSignals({dataTerminalReady:false,requestToSend:false});  // DTR 이 켜진 채 리셋되면 다운로드 모드로 멈춘다
+    // DTR·RTS 를 내려 둔다(DTR 이 켜진 채 리셋되면 다운로드 모드로 멈춤). 반드시 RTS 먼저 — DTR 을 먼저 내리거나 한 번에 내리면
+    // 'DTR 꺼짐·RTS 켜짐' 순간이 생겨 C6 가 리셋된다 (2026-11-09 실기기: RTS→DTR 만 리셋 없음)
+    await port.setSignals({requestToSend:false});
+    await port.setSignals({dataTerminalReady:false});
     const reader=port.readable.pipeThrough(new TextDecoderStream()).getReader();
     let buf='';
     for(;;){
