@@ -30,7 +30,7 @@ button{font:inherit;color:#fff;background:var(--btn);border:0;border-radius:8px;
 <header><h1>접점 상태</h1><div class="r"><span id="st">연결 중…</span><button id="cn" hidden>USB 연결</button></div></header>
 <main id="g"></main>
 <script>
-const N=25,OFF=35,g=document.getElementById('g'),st=document.getElementById('st'),cn=document.getElementById('cn'),tiles=[];
+const N=25,OFF=8,g=document.getElementById('g'),st=document.getElementById('st'),cn=document.getElementById('cn'),tiles=[];
 for(let i=1;i<=N;i++){
   const t=document.createElement('div');t.className='t off';
   t.innerHTML=`<div class="h"><b>${String(i).padStart(2,'0')}</b><span class="m">대기</span></div>`+

@@ -11,6 +11,7 @@
 #include <RadioLib.h>
 #include <U8g2lib.h>
 #include "page.h"
+#include "proto.h"
 
 // ---- 설정 ----
 // 국내 920MHz 대역(KR920)만 쓴다 — 아래 static_assert 가 대역·채널·출력을 벗어나면 빌드를 막는다(실행 중 바꾸는 명령은 없음)
@@ -24,8 +25,11 @@ static_assert(FREQ_HZ >= 920900000 && FREQ_HZ <= 923300000 && (FREQ_HZ - 9209000
               "국내 KR920 채널(920.9~923.3MHz, 200kHz 간격)만 쓸 수 있습니다");
 static_assert(TX_DBM + ANT_GAIN_DBI <= KR_MAX_EIRP, "국내 EIRP 상한을 넘습니다 (TX_DBM 또는 안테나 이득을 낮추세요)");
 constexpr uint8_t N_NODES = 25;
-constexpr uint32_t HEARTBEAT_MS = 10000;  // 25대 × (패킷+ACK 67ms) / 10초 ≈ 채널 17%
-constexpr uint32_t OFFLINE_MS = 35000;   // 하트비트 3번 놓치면 꺼짐 — page.h 의 OFF(초)와 같은 값
+// 2026-11-09 사용자: 꺼짐 판정 35초는 길다 → 8초. 하트비트는 ACK 없이(누를 때만 ACK), 송신기 동기화는 수신기 비콘으로
+constexpr uint32_t HEARTBEAT_MS = 3000;   // +0~0.5초 지터. 25대 × (패킷 36ms + LBT 6ms) / 3.25초 ≈ 채널 32%
+constexpr uint32_t BEACON_MS = 3000;      // 수신기 비콘(+0~0.3초) — 각 송신기가 수신기에 들어간 자기 상태를 확인. 약 1.3%
+constexpr uint32_t OFFLINE_MS = 8000;     // 하트비트 2번 반 놓치면 꺼짐 — page.h 의 OFF(초)와 같은 값
+constexpr uint32_t LINK_LOST_MS = 8000;   // 송신기: 비콘·ACK 를 이만큼 못 받으면 link -- · READY 지움
 constexpr uint32_t ACK_WAIT_MS = 300;
 const char *AP_SSID = "C6L-GW";
 const char *AP_PASS = "c6l-12345";       // 8자 이상
@@ -37,8 +41,10 @@ constexpr int OLED_CS = 6, OLED_DC = 18, OLED_RST = 15;  // SSD1306 64x48, LoRa 
 constexpr int I2C_SDA = 10, I2C_SCL = 8;
 constexpr uint8_t PI4IO = 0x43;          // IO 확장칩: P0 버튼, P5 LNA_EN, P6 ANT_SW, P7 SX_NRST
 
-// 패킷: STATE = MAGIC T_STATE id seq bits cnt1 cnt2 / ACK = MAGIC T_ACK id seq bits(수신기가 저장한 상태를 되돌려 줌)
-constexpr uint8_t MAGIC = 0xC6, T_STATE = 1, T_ACK = 2;
+// 패킷: STATE(누름, ACK 요청) / HB(하트비트, ACK 없음) = MAGIC 타입 id seq bits cnt1 cnt2
+//       ACK = MAGIC T_ACK id seq bits(수신기가 저장한 상태) / BEACON = MAGIC T_BEACON + 25대 × 2비트(proto.h)
+constexpr uint8_t MAGIC = 0xC6, T_STATE = 1, T_ACK = 2, T_HB = 3, T_BEACON = 4;
+static_assert(N_NODES == BEACON_NODES, "비콘 칸 수와 송신기 수가 같아야 합니다");
 
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, RADIOLIB_NC, LORA_BUSY);  // NRST 는 확장칩 P7
 U8G2_SSD1306_64X48_ER_F_4W_HW_SPI oled(U8G2_R2, OLED_CS, OLED_DC, OLED_RST);  // R2 = 180° (2026-11-09 사용자: R0 은 뒤집혀 보임)
@@ -130,47 +136,76 @@ int krTransmit(const uint8_t *buf, size_t len, int tries) {
 
 // ---- 송신기 ----
 uint8_t seq = 0, fails = 0;
-uint8_t syncedBits = 0;  // 수신기가 ACK 로 되돌려 준 상태 — OLED 는 이 값만 보여 준다(0 = 아직/끊김)
-uint32_t lastOk = 0, nextTry = 0;
+uint8_t syncedBits = 0;  // 수신기가 ACK·비콘으로 되돌려 준 내 상태 — OLED 는 이 값만 보여 준다(0 = 아직/끊김)
+uint32_t nextTry = 0, nextHb = 0, lastHeardMs = 0;
 bool pending = true, linkOk = false;
 
-bool sendOnce() {
+bool nodePacket(const uint8_t *b, size_t len, uint8_t wantSeq) {  // 비콘이면 동기화, 내 ACK 면 true
+  if (len == 2 + BEACON_BYTES && b[0] == MAGIC && b[1] == T_BEACON) {
+    syncedBits = beaconGet(b + 2, myId);  // 0 = 수신기가 나를 꺼짐으로 봄
+    linkOk = syncedBits != 0;
+    lastHeardMs = millis();
+    return false;
+  }
+  if (len == 5 && b[0] == MAGIC && b[1] == T_ACK && b[2] == myId && b[3] == wantSeq) {
+    syncedBits = b[4];
+    linkOk = true;
+    lastHeardMs = millis();
+    return true;
+  }
+  return false;  // 다른 송신기의 패킷 등
+}
+bool readNodePacket(uint8_t wantSeq) {  // radioIrq 가 선 뒤에 부른다. 끝나면 다시 수신 모드
+  radioIrq = false;
+  uint8_t b[2 + BEACON_BYTES];
+  size_t len = radio.getPacketLength();  // readData 보다 먼저 불러야 한다
+  bool mine = radio.readData(b, sizeof b) == RADIOLIB_ERR_NONE && nodePacket(b, len, wantSeq);
+  radio.startReceive();
+  return mine;
+}
+
+bool sendOnce() {  // 누름: ACK 를 받아야 성공
   uint8_t p[7] = {MAGIC, T_STATE, myId, ++seq, bits(), ins[0].count, ins[1].count};
   if (krTransmit(p, sizeof p, 1) != RADIOLIB_ERR_NONE) return false;  // 채널이 차 있으면 이번 시도는 접고 물러난다
   radio.startReceive();
   for (uint32_t t0 = millis(); millis() - t0 < ACK_WAIT_MS;) {
     pollInputs();
-    if (!radioIrq) continue;
-    radioIrq = false;
-    uint8_t a[5];
-    size_t len = radio.getPacketLength();  // readData 보다 먼저 불러야 한다
-    if (radio.readData(a, sizeof a) == RADIOLIB_ERR_NONE && len == sizeof a &&
-        a[0] == MAGIC && a[1] == T_ACK && a[2] == myId && a[3] == seq) {
-      syncedBits = a[4];
-      radio.standby();
-      return true;
-    }
-    radio.startReceive();  // 다른 노드 패킷이면 계속 기다린다
+    if (radioIrq && readNodePacket(seq)) return true;
   }
-  radio.standby();
-  return false;
+  return false;  // 수신 모드는 그대로(비콘을 계속 듣는다)
+}
+
+void sendHeartbeat() {  // ACK 없음 — 수신기의 꺼짐 판정용
+  uint8_t p[7] = {MAGIC, T_HB, myId, ++seq, bits(), ins[0].count, ins[1].count};
+  krTransmit(p, sizeof p, 3);
+  radio.startReceive();
 }
 
 void nodeLoop() {
   pollInputs();
+  if (radioIrq) readNodePacket(0);  // 비콘
   uint32_t now = millis();
+  if (linkOk && now - lastHeardMs > LINK_LOST_MS) {  // 수신기와 못 맞추면 READY 를 띄우지 않는다
+    linkOk = false; syncedBits = 0;
+    Serial.println("link lost (비콘·ACK 없음)");
+  }
   if (dirty) { dirty = false; pending = true; fails = 0; nextTry = now; }
-  if (now - lastOk >= HEARTBEAT_MS) pending = true;
-  if (!pending || (int32_t)(now - nextTry) < 0) return;
-  if (sendOnce()) {
-    pending = false; fails = 0; linkOk = true; lastOk = millis();
-    Serial.printf("tx ok seq=%u bits=%u synced=%u c=%u/%u\n", seq, bits(), syncedBits, ins[0].count, ins[1].count);
-  } else {
-    fails++;
-    if (fails == 8) Serial.println("link lost (ACK 8회 실패)");
-    if (fails >= 8) { linkOk = false; syncedBits = 0; }  // 수신기와 못 맞추면 READY 를 띄우지 않는다
-    // 짧게 몇 번 다시 보내고, 계속 안 되면(수신기 꺼짐 등) 5~10초 간격으로 물러나 채널을 비운다
-    nextTry = millis() + (fails < 8 ? random(50, 250) * fails : random(5000, 10000));
+  if (pending && (int32_t)(now - nextTry) >= 0) {
+    if (sendOnce()) {
+      pending = false; fails = 0;
+      nextHb = millis() + HEARTBEAT_MS + random(0, 500);
+      Serial.printf("tx ok seq=%u bits=%u synced=%u c=%u/%u\n", seq, bits(), syncedBits, ins[0].count, ins[1].count);
+    } else if (++fails >= 7) {
+      pending = false;  // 지금 상태는 다음 하트비트(3초 안)가 실어 보낸다
+      Serial.println("press ACK 7회 실패 — 하트비트로 전달");
+    } else {
+      nextTry = millis() + random(50, 250) * fails;
+    }
+    return;
+  }
+  if ((int32_t)(now - nextHb) >= 0) {
+    sendHeartbeat();
+    nextHb = millis() + HEARTBEAT_MS + random(0, 500);  // 지터: 여러 대가 같은 박자로 겹치지 않게
   }
 }
 
@@ -181,22 +216,36 @@ Node nodes[N_NODES + 1];
 String stateJson();
 void pushState() { Serial.printf("S %s\n", stateJson().c_str()); }  // USB 앱(Web Serial)용 상태 한 줄
 
+void sendBeacon() {  // 살아 있는 송신기들의 상태를 2비트씩 — 송신기는 자기 칸을 보고 동기화·링크를 판단
+  uint8_t b[2 + BEACON_BYTES] = {MAGIC, T_BEACON};
+  uint32_t now = millis();
+  for (uint8_t i = 1; i <= N_NODES; i++)
+    if (nodes[i].seen && now - nodes[i].seenMs < OFFLINE_MS) beaconSet(b + 2, i, nodes[i].bits);
+  krTransmit(b, sizeof b, 3);
+  radio.startReceive();
+}
+
 void gwLoop() {
   web.handleClient();
-  static uint32_t lastPush = 0;
+  static uint32_t lastPush = 0, nextBeacon = 0;
   if (millis() - lastPush >= 1000) { lastPush = millis(); pushState(); }  // 경과 시간·끊김 갱신용
+  if ((int32_t)(millis() - nextBeacon) >= 0) { sendBeacon(); nextBeacon = millis() + BEACON_MS + random(0, 300); }
   if (!radioIrq) return;
   radioIrq = false;
   uint8_t p[7];
   size_t len = radio.getPacketLength();
-  if (radio.readData(p, sizeof p) == RADIOLIB_ERR_NONE && len == sizeof p &&
-      p[0] == MAGIC && p[1] == T_STATE && p[2] >= 1 && p[2] <= N_NODES) {
-    nodes[p[2]] = {true, millis(), p[4], p[5], p[6], (int16_t)radio.getRSSI()};
-    uint8_t ack[5] = {MAGIC, T_ACK, p[2], p[3], nodes[p[2]].bits};  // 저장한 상태를 되돌려 줘 송신기가 동기화를 확인
-    krTransmit(ack, sizeof ack, 4);  // 쉼·LBT 지키며 최대 ~130ms 안에 (송신기 ACK 대기 300ms)
-    Serial.printf("rx id=%u seq=%u bits=%u c=%u/%u rssi=%d\n", p[2], p[3], p[4], p[5], p[6], nodes[p[2]].rssi);
-    pushState();  // 바뀐 상태를 USB 앱에 바로
-    lastPush = millis();
+  if (radio.readData(p, sizeof p) == RADIOLIB_ERR_NONE && len == sizeof p && p[0] == MAGIC &&
+      (p[1] == T_STATE || p[1] == T_HB) && p[2] >= 1 && p[2] <= N_NODES) {
+    Node &n = nodes[p[2]];
+    bool changed = !n.seen || millis() - n.seenMs >= OFFLINE_MS || n.bits != p[4];
+    n = {true, millis(), p[4], p[5], p[6], (int16_t)radio.getRSSI()};
+    if (p[1] == T_STATE) {
+      uint8_t ack[5] = {MAGIC, T_ACK, p[2], p[3], n.bits};  // 저장한 상태를 되돌려 줘 송신기가 동기화를 확인
+      krTransmit(ack, sizeof ack, 4);  // 쉼·LBT 지키며 최대 ~130ms 안에 (송신기 ACK 대기 300ms)
+    }
+    if (p[1] == T_STATE || changed)  // 하트비트는 바뀐 것만 기록 (25대면 초당 8개)
+      Serial.printf("rx id=%u %s seq=%u bits=%u c=%u/%u rssi=%d\n", p[2], p[1] == T_STATE ? "st" : "hb", p[3], p[4], p[5], p[6], n.rssi);
+    if (changed) { pushState(); lastPush = millis(); }  // 바뀐 상태를 USB 앱에 바로
   }
   radio.startReceive();
 }
@@ -333,8 +382,8 @@ void setup() {
     web.on("/", [] { web.send(200, "text/html; charset=utf-8", PAGE); });
     web.on("/s", handleState);
     web.begin();
-    radio.startReceive();
   }
+  if (radioOk) radio.startReceive();  // 수신기는 패킷을, 송신기는 비콘을 늘 듣는다
 }
 
 void loop() {
