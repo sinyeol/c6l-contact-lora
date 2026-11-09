@@ -3,83 +3,141 @@
 //  · 수신기 Wi-Fi(http://192.168.4.1) 로 열면 /s 를 300ms 마다 읽는다.
 //  · 그 밖(https·파일)으로 열면 수신기 USB 를 Web Serial 로 열어 "S [...]" 줄을 받는다.
 //    USB 모드에서는 [업데이트] 로 송신기 펌웨어를 일괄(한 대씩) 와이파이 업데이트할 수 있다.
+// 디자인: gametools.crowny.org 딜러 화면의 토큰·치수를 그대로 쓴다(2026-11-09 사용자 레퍼런스) — 새 색·치수를 만들지 않는다.
+//   STANDBY(빨강) = 송신기 전원 연결·대기, READY(초록) = 버튼 누름, OFFLINE(회색) = 꺼짐·끊김
 // web/index.html 은 이 문자열을 tools/export_web.py 로 꺼낸 사본이다(직접 고치지 말 것).
 const char PAGE[] = R"html(<!doctype html>
-<html lang="ko"><head><meta charset="utf-8">
+<html lang="ko" data-theme="light"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#111418">
+<meta name="theme-color" content="#f7f6f2">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<title>접점 상태</title>
+<title>Ready Board</title>
 <style>
-:root{color-scheme:dark;--bg:#111418;--tile:#1c2128;--line:#2d333b;--fg:#e6edf3;--mut:#8b949e;--on:#238636;--stb:#da3633;--warn:#d29922;--btn:#1f6feb}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.3 system-ui,sans-serif}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px}
-h1{font-size:18px;margin:0}
-.r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-button{font:inherit;color:#fff;background:var(--btn);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
-button:disabled{opacity:.5;cursor:default}
-button.sub{background:#30363d}
-#g{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 16px}
-@media (max-width:700px){#g{grid-template-columns:repeat(3,1fr)}}
-.t{background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0}
-.t.off{opacity:.45}
-.h{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
-.h b{font-size:22px}
-.m{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.p{display:flex;gap:6px;align-items:center;margin-top:6px;padding:6px 8px;border-radius:6px;background:#0d1117}
-.p.on{color:#fff}
-.p1.on{background:var(--on)}
-.p2.on{background:var(--stb)}
-.v{font-weight:700}
-.c{margin-left:auto;font-size:13px;opacity:.8}
-#st.bad{color:var(--warn)}
-dialog{background:var(--tile);color:var(--fg);border:1px solid var(--line);border-radius:12px;width:min(520px,calc(100% - 32px));padding:16px}
-dialog::backdrop{background:#0008}
-dialog h2{font-size:17px;margin:0 0 6px}
-dialog p{margin:0 0 10px}
-dialog .m{white-space:normal}
-#ul{margin:10px 0;max-height:240px;overflow:auto}
-#ul label{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)}
-#ul label .m{margin-left:auto}
-#ulg{max-height:140px;overflow:auto;background:#0d1117;padding:8px;border-radius:6px;font-size:12px;white-space:pre-wrap;margin:10px 0 0}
+:root{--bg:oklch(0.975 0.004 90);--fg:oklch(0.24 0.01 260);--panel:oklch(1 0 0);--line:oklch(0.89 0.006 90);--muted:oklch(0.55 0.01 260);
+--red:oklch(0.56 0.19 27);--green:oklch(0.62 0.16 152);--gold:oklch(0.85 0.15 95);--disabled:oklch(0.6 0.01 260 / 0.4);--on-signal:oklch(1 0 0 / 0.95);
+--font:"Helvetica Neue",Helvetica,Arial,sans-serif;--mono:ui-monospace,monospace;color-scheme:light}
+[data-theme="dark"]{--bg:oklch(0.19 0.012 260);--fg:oklch(0.93 0.005 90);--panel:oklch(0.24 0.014 260);--line:oklch(0.32 0.014 260);--muted:oklch(0.66 0.01 260);color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--fg);transition:background .3s ease,color .3s ease}
+#wrap{min-height:100vh;display:flex;flex-direction:column}
+.gt-header{display:flex;align-items:center;gap:20px;padding:14px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.gt-brand{display:flex;align-items:center;gap:10px}
+.gt-brand .mark{width:30px;height:30px;border-radius:6px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font:800 11px var(--mono)}
+.gt-brand .name{font-weight:700;letter-spacing:.14em;font-size:13px}
+.gt-brand .tool{font-size:13px;color:var(--muted)}
+.gt-seg{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+.gt-seg button{white-space:nowrap;border:none;cursor:pointer;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;background:transparent;color:var(--muted);font-family:var(--font)}
+.gt-seg button.on{background:var(--fg);color:var(--bg)}
+.right{margin-left:auto}
+main{flex:1;display:flex;flex-direction:column;gap:18px;padding:22px 24px 28px;max-width:1100px;width:100%;margin:0 auto}
+.row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+#lbl{font-size:15px;font-weight:700;letter-spacing:.08em}
+#info{font-family:var(--mono);font-size:13px;color:var(--muted)}
+#panel{flex:1;min-height:420px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;display:flex;flex-direction:column}
+#grid{flex:1;display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:minmax(72px,1fr);gap:10px}  /* 25대 = 5×5 고정, 화면 높이를 채움 */
+.tile{border-radius:12px;background:var(--disabled);color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:background .3s ease;position:relative;min-width:0}
+.tile.ready{background:var(--green);color:var(--on-signal)}
+.tile.standby{background:var(--red);color:var(--on-signal)}
+.tile .n{font-size:clamp(20px,3.4vw,40px);font-weight:800;line-height:1.05}
+.tile .lbl{font-size:clamp(10px,1vw,13px);letter-spacing:.14em;font-weight:600;opacity:.85}
+.tile .ver{position:absolute;right:8px;bottom:6px;font:600 10px var(--mono);opacity:.75}
+#countView{display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+#countBig{font-size:clamp(72px,14vw,150px);font-weight:800;line-height:1;transition:color .3s ease}
+#countBig .of{color:var(--muted);font-weight:600}
+#barTrack{width:min(480px,80%);height:10px;border-radius:5px;background:var(--line);overflow:hidden}
+#barFill{height:100%;width:0;background:var(--green);transition:width .35s ease}
+#waitingText{font-size:14px;color:var(--muted);font-family:var(--mono);text-align:center;max-width:80%}
+.btn{border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;font-family:var(--font)}
+.btn.go{background:var(--green);border-color:var(--green);color:var(--on-signal)}
+.btn:disabled{opacity:.5;cursor:default}
+#st{font-size:13px;color:var(--muted)}
+#st.bad{color:var(--red)}
+#hint{font-size:12px;color:var(--muted)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+dialog{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:18px;width:min(520px,calc(100% - 32px));padding:22px}
+dialog::backdrop{background:oklch(0 0 0 / .35)}
+dialog h2{font-size:15px;font-weight:700;letter-spacing:.08em;margin:0 0 8px}
+dialog p,#ui{font-size:13px;color:var(--muted);margin:0 0 12px}
+#ul{margin:12px 0;max-height:240px;overflow:auto}
+#ul label{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+#ul label span{margin-left:auto;font-size:12px;color:var(--muted)}
+#ulg{max-height:140px;overflow:auto;background:var(--bg);border:1px solid var(--line);padding:8px;border-radius:8px;font:12px var(--mono);white-space:pre-wrap;margin:12px 0 0}
+@media (max-width:520px){main{padding:16px}#panel{padding:12px}#grid{gap:6px;grid-auto-rows:minmax(56px,1fr)}.tile .lbl{letter-spacing:.06em;font-size:9px}.tile .ver{display:none}.gt-header{padding:12px 16px}}
 </style></head><body>
-<header><h1>접점 상태</h1><div class="r"><span id="st">연결 중…</span><button id="ub" class="sub" hidden>업데이트</button><button id="cn" hidden>USB 연결</button></div></header>
-<main id="g"></main>
+<div id="wrap">
+<header class="gt-header">
+  <div class="gt-brand"><span class="mark">C6L</span><span class="name">READY BOARD</span><span class="tool">LoRa 922.1MHz</span></div>
+  <div class="gt-seg right" id="themeSeg"><button type="button" data-theme="auto">자동</button><button type="button" data-theme="light">라이트</button><button type="button" data-theme="dark">다크</button></div>
+</header>
+<main>
+  <div class="row">
+    <div id="lbl">RECEIVER</div><span id="info">—</span>
+    <div class="gt-seg right" id="viewSeg"><button type="button" data-view="grid">그리드</button><button type="button" data-view="count">카운트</button></div>
+  </div>
+  <div id="panel">
+    <div id="grid"></div>
+    <div id="countView"><div id="countBig"><span id="readyN">0</span><span class="of"> / <span id="liveN">0</span></span></div><div id="barTrack"><div id="barFill"></div></div><div id="waitingText"></div></div>
+  </div>
+  <div class="row">
+    <button type="button" class="btn go" id="cn" hidden>USB 연결</button><button type="button" class="btn" id="ub" hidden>업데이트</button>
+    <span id="st">연결 중…</span>
+    <div class="legend right"><span><i style="background:var(--red)"></i>STANDBY 전원 연결</span><span><i style="background:var(--green)"></i>READY 버튼 누름</span><span><i style="background:var(--disabled)"></i>OFFLINE 꺼짐</span></div>
+  </div>
+  <div id="hint">송신기 1번 버튼 = READY, 2번 버튼 = STANDBY · 송신기가 꺼지면 8초 안에 OFFLINE</div>
+</main>
+</div>
 <dialog id="ud"><form method="dialog">
-<h2>펌웨어 일괄 업데이트 <span id="ugw" class="m"></span></h2>
-<p class="m">앱 이미지(…-app-0x10000.bin)를 고르면 USB 로 수신기에 올리고, 수신기가 송신기를 한 대씩 와이파이로 업데이트합니다. 송신기는 업데이트하는 동안 잠깐 꺼짐으로 보입니다.</p>
+<h2>펌웨어 일괄 업데이트 <span id="ugw" style="font-weight:400;letter-spacing:0;color:var(--muted)"></span></h2>
+<p>앱 이미지(…-app-0x10000.bin)를 고르면 USB 로 수신기에 올리고, 수신기가 송신기를 한 대씩 와이파이로 업데이트합니다. 송신기는 업데이트하는 동안 잠깐 OFFLINE 으로 보입니다.</p>
 <input type="file" id="uf" accept=".bin">
-<div id="ui" class="m"></div>
+<div id="ui" style="margin-top:8px"></div>
 <div id="ul"></div>
-<div class="r"><button type="button" id="us">올리고 시작</button><button type="button" id="ua" class="sub" hidden>수신기도 업데이트</button><button class="sub" value="x">닫기</button></div>
+<div class="row" style="gap:10px"><button type="button" class="btn go" id="us">올리고 시작</button><button type="button" class="btn" id="ua" hidden>수신기도 업데이트</button><button class="btn" value="x">닫기</button></div>
 <pre id="ulg"></pre>
 </form></dialog>
 <script>
-const N=25,OFF=8,$=id=>document.getElementById(id),g=$('g'),st=$('st'),cn=$('cn'),tiles=[];
+const N=25,OFF=8,$=id=>document.getElementById(id),st=$('st'),cn=$('cn'),tiles=[];
+const store={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+// ---- 테마(자동/라이트/다크) · 보기(그리드/카운트) ----
+const mq=matchMedia('(prefers-color-scheme: dark)');
+function theme(m){const d=m==='dark'||(m==='auto'&&mq.matches);document.documentElement.dataset.theme=d?'dark':'light';
+  document.querySelector('meta[name=theme-color]').content=d?'#1d2127':'#f7f6f2';
+  $('themeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.theme===m))}
+$('themeSeg').onclick=e=>{const b=e.target.closest('button');if(b){store.set('rb-theme',b.dataset.theme);theme(b.dataset.theme)}};
+mq.addEventListener('change',()=>{if((store.get('rb-theme')||'auto')==='auto')theme('auto')});
+theme(store.get('rb-theme')||'auto');
+function view(v){$('grid').style.display=v==='grid'?'grid':'none';$('countView').style.display=v==='count'?'flex':'none';
+  $('viewSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.view===v))}
+$('viewSeg').onclick=e=>{const b=e.target.closest('button');if(b){store.set('rb-view',b.dataset.view);view(b.dataset.view)}};
+view(store.get('rb-view')||'grid');
+
 for(let i=1;i<=N;i++){
-  const t=document.createElement('div');t.className='t off';
-  t.innerHTML=`<div class="h"><b>${String(i).padStart(2,'0')}</b><span class="m">대기</span></div>`+
-    [1,2].map(k=>`<div class="p p${k}"><span>${k==1?'READY':'STANDBY'}</span><span class="v">-</span><span class="c"></span></div>`).join('');  // 접점1 = READY(초록), 접점2 = STANDBY(빨강)
-  g.append(t);tiles.push(t);
+  const t=document.createElement('div');t.className='tile';
+  t.innerHTML=`<span class="n">${String(i).padStart(2,'0')}</span><span class="lbl">OFFLINE</span><span class="ver"></span>`;
+  $('grid').append(t);tiles.push(t);
 }
 const ago=s=>s<60?s+'초':s<3600?Math.floor(s/60)+'분':Math.floor(s/3600)+'시간';
 const say=(txt,bad)=>{st.textContent=txt;st.className=bad?'bad':''};
-let last=0,lastD=[];
-function render(d){  // d = [null | {a,b,c1,c2,r,v}] × 25
-  let on=0;last=Date.now();lastD=d;
+let last=0,lastD=[],gwVer='';
+function render(d){  // d = [null | {a,b,c1,c2,r,v}] × 25 — b: 1 = READY, 2 = STANDBY
+  let live=0,ready=0;const wait=[];last=Date.now();lastD=d;
   d.forEach((n,i)=>{
-    const t=tiles[i],live=!!n&&n.a<OFF;on+=live;
-    t.classList.toggle('off',!live);
-    t.querySelector('.m').textContent=!n?'대기':live?`${n.a}초 전 · ${n.r}dBm${n.v?' · v'+n.v:''}`:`끊김 ${ago(n.a)}`;
-    t.querySelectorAll('.p').forEach((p,k)=>{
-      const c=live&&(n.b>>k&1)===1;  // 송신기가 꺼지면(끊김) 둘 다 OFF
-      p.classList.toggle('on',c);
-      p.querySelector('.v').textContent=!n?'-':c?'ON':'OFF';
-      p.querySelector('.c').textContent=n?'×'+n['c'+(k+1)]:'';
-    });
+    const t=tiles[i],on=!!n&&n.a<OFF,r=on&&n.b===1;
+    t.classList.toggle('ready',r);t.classList.toggle('standby',on&&!r);
+    t.querySelector('.lbl').textContent=on?(r?'READY':'STANDBY'):'OFFLINE';
+    t.querySelector('.ver').textContent=n&&n.v?'v'+n.v:'';
+    t.title=!n?'아직 신호 없음':on?`${n.a}초 전 · ${n.r}dBm · 누름 READY ${n.c1} / STANDBY ${n.c2}`:`끊김 ${ago(n.a)} 전`;
+    if(on){live++;if(r)ready++;else wait.push(i+1)}
   });
-  say(`연결 ${on}/${N}`);
+  $('readyN').textContent=ready;$('liveN').textContent=live;
+  const all=live>0&&ready===live;
+  $('countBig').style.color=all?'var(--green)':'var(--fg)';
+  $('barFill').style.width=(live?ready/live*100:0).toFixed(1)+'%';
+  $('waitingText').textContent=!live?'연결된 송신기 없음':all?'ALL READY':'STANDBY: '+wait.slice(0,15).join(', ')+(wait.length>15?' …':'');
+  $('info').textContent=`READY ${ready} · 연결 ${live}/${N}${gwVer?' · 수신기 v'+gwVer:''}`;
+  say(all?'전원 READY':`대기 ${ready}/${live}`);
 }
 
 // ---- Wi-Fi: 수신기가 이 페이지를 직접 줄 때 ----
@@ -92,13 +150,14 @@ async function poll(){
 const open=new Set();
 let gw=null,waiters=[];  // gw = S 줄을 주는 포트(수신기)
 function onLine(line,port){
-  if(line.startsWith('S [')){try{render(JSON.parse(line.slice(2)));gw=port;$('ub').hidden=false}catch(e){}return}
+  if(line.startsWith('S [')){try{render(JSON.parse(line.slice(2)));if(gw!==port){gw=port;$('ub').hidden=false;askVer()}}catch(e){}return}
   for(const w of waiters.slice())if(w.re.test(line)){waiters.splice(waiters.indexOf(w),1);w.ok(line)}
   if(line.startsWith('U '))updLine(line);
 }
 const waitLine=(re,ms=20000)=>new Promise((ok,no)=>{const w={re,ok};waiters.push(w);
   setTimeout(()=>{const i=waiters.indexOf(w);if(i>=0){waiters.splice(i,1);no(new Error('수신기 응답 없음'))}},ms)});
 async function gwWrite(d){const w=gw.writable.getWriter();try{await w.write(typeof d==='string'?new TextEncoder().encode(d+'\n'):d)}finally{w.releaseLock()}}
+async function askVer(){try{const r=waitLine(/^id=0 /,3000);await gwWrite('?');const m=(await r).match(/fw=(\d+) store=(\d+)/);if(m){gwVer=m[1];$('ugw').textContent=`수신기 v${m[1]}${+m[2]?' · 보관본 v'+m[2]:''}`}}catch(e){}}
 async function serialApi(){
   if(navigator.serial)return navigator.serial;
   if(navigator.usb)return (await import('./web-serial-polyfill.js')).serial;  // 같은 폴더 사본 — 오프라인에서도 동작
@@ -126,7 +185,7 @@ async function run(port){
   }catch(e){}
   try{await port.close()}catch(e){}
   open.delete(port);
-  if(gw===port){gw=null;$('ub').hidden=true}
+  if(gw===port){gw=null;gwVer='';$('ub').hidden=true}
   if(!open.size){say('USB 끊김 — 다시 꽂거나 [USB 연결]',true);cn.hidden=false}
 }
 async function usb(){
@@ -151,9 +210,9 @@ function ulist(){  // 살아 있는 송신기 — 기본으로 버전이 다른 
     if(!n||n.a>=OFF)return;
     const id=i+1,old=!n.v,need=!!fw&&!old&&n.v!==fw.ver;
     const s=ust[id]||(old?'USB 로 한 번 굽기 필요':!fw?'':need?'대상':'최신');
-    rows.push(`<label><input type="checkbox" value="${id}"${need?' checked':''}${old?' disabled':''}> ${String(id).padStart(2,'0')} · v${n.v||'?'}<span class="m" id="ust${id}">${s}</span></label>`);
+    rows.push(`<label><input type="checkbox" value="${id}"${need?' checked':''}${old?' disabled':''}> ${String(id).padStart(2,'0')} · v${n.v||'?'}<span id="ust${id}">${s}</span></label>`);
   });
-  $('ul').innerHTML=rows.join('')||'<span class="m">살아 있는 송신기가 없습니다</span>';
+  $('ul').innerHTML=rows.join('')||'<span style="font-size:13px;color:var(--muted)">연결된 송신기가 없습니다</span>';
 }
 function updLine(l){
   const m=l.match(/^U (\d+) (.*)$/);
@@ -161,11 +220,7 @@ function updLine(l){
   ulog(l);
   if(l==='U done'){ulog('송신기 업데이트 끝 — 수신기도 바꾸려면 [수신기도 업데이트]');$('ua').hidden=false;$('us').disabled=false}
 }
-$('ub').onclick=async()=>{
-  ulist();$('ud').showModal();
-  try{const r=waitLine(/^id=0 /,3000);await gwWrite('?');const m=(await r).match(/fw=(\d+) store=(\d+)/);
-    $('ugw').textContent=m?`수신기 v${m[1]}${+m[2]?' · 보관본 v'+m[2]:''}`:''}catch(e){}
-};
+$('ub').onclick=()=>{ulist();$('ud').showModal();askVer()};
 $('uf').onchange=async()=>{
   fw=null;ust={};const f=$('uf').files[0];if(!f)return;
   const b=new Uint8Array(await f.arrayBuffer()),m=new TextDecoder('latin1').decode(b).match(/C6LFW-VER=(\d+);/);
@@ -195,7 +250,7 @@ $('us').onclick=async()=>{
   }catch(e){ulog('실패: '+e.message)}
   $('us').disabled=false;
 };
-$('ua').onclick=async()=>{ulog('수신기에 적용 — 재부팅합니다');await gwWrite('fw apply')};
+$('ua').onclick=async()=>{ulog('수신기에 적용 — 재부팅합니다');await gwWrite('fw apply');gwVer=''};
 
 location.protocol==='http:'?poll():usb();
 // https 로 한 번 열면 서비스워커가 페이지·폴리필을 저장해 두어, 그 뒤로는 와이파이·인터넷 없이 열린다(홈 화면에 추가 권장)

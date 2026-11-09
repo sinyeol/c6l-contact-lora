@@ -21,7 +21,7 @@
 #endif
 
 // ---- 펌웨어 버전 — 올릴 때마다 1 씩. 하트비트에 실려 앱에 보이고, 앱은 .bin 안의 표식(FW_MARK)으로 버전을 읽는다 ----
-#define FW_VERSION 14  // 12 = 와이파이 업데이트 도입, 13 = 실기기 시험판, 14 = 업데이트 중 재업로드 막음
+#define FW_VERSION 15  // 12 = 와이파이 업데이트 도입, 13 = 실기기 시험판, 14 = 업데이트 중 재업로드 막음, 15 = Ready Board 디자인(수신기 Wi-Fi 페이지)
 #define XSTR(x) STR(x)
 #define STR(x) #x
 const char FW_MARK[] = "C6LFW-VER=" XSTR(FW_VERSION) ";";
