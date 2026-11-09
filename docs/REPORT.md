@@ -81,8 +81,8 @@
 
 | 파일 | 주소 | 용도 |
 |---|---|---|
-| `c6l-contact-lora-v1.4-full-0x0.bin` | `0x0` | **새 기기**(부트로더·파티션·앱 전체). NVS 까지 덮어써 ID 가 지워지므로 굽고 나서 ID 를 정합니다. |
-| `c6l-contact-lora-v1.4-app-0x10000.bin` | `0x10000` | **업데이트**(앱만, ID 유지). 와이파이 일괄 업데이트에도 이 파일을 씁니다. |
+| `c6l-contact-lora-v1.5-full-0x0.bin` | `0x0` | **새 기기**(부트로더·파티션·앱 전체). NVS 까지 덮어써 ID 가 지워지므로 굽고 나서 ID 를 정합니다. |
+| `c6l-contact-lora-v1.5-app-0x10000.bin` | `0x10000` | **업데이트**(앱만, ID 유지). 와이파이 일괄 업데이트에도 이 파일을 씁니다. |
 | `boot_app0-0xe000.bin` | `0xe000` | 와이파이 업데이트를 한 기기를 USB 로 다시 구울 때 앱과 **함께** 굽습니다(부팅 영역을 첫 번째로 되돌림). |
 
 **크롬·엣지로 굽기(설치 없음):**
@@ -276,11 +276,11 @@ PC 는 패키지의 `web/index.html` 을 바로 열어도 됩니다.
 
 ## 10. 파일 구성
 
-**패키지(`c6l-contact-lora-v1.4-20261109.zip`):**
+**패키지(`c6l-contact-lora-v1.5-20261109.zip`):**
 ```
 REPORT.md                                  이 문서
-firmware/c6l-contact-lora-v1.4-full-0x0.bin    새 기기용 전체 이미지 (0x0)
-firmware/c6l-contact-lora-v1.4-app-0x10000.bin 업데이트용 앱 이미지 (0x10000, 와이파이 일괄 업데이트에도 사용)
+firmware/c6l-contact-lora-v1.5-full-0x0.bin    새 기기용 전체 이미지 (0x0)
+firmware/c6l-contact-lora-v1.5-app-0x10000.bin 업데이트용 앱 이미지 (0x10000, 와이파이 일괄 업데이트에도 사용)
 firmware/boot_app0-0xe000.bin              와이파이 업데이트한 기기를 USB 로 다시 구울 때 함께 (0xe000)
 firmware/flash_args.txt                    개별 이미지 주소·플래시 설정
 firmware/SHA256SUMS.txt                    이미지 해시
@@ -318,3 +318,4 @@ source/c6l-contact-lora-src.zip            소스 전체 (git archive)
 | `d750d3f` | 8초 실측·검증 기록 |
 | `2b79c74` | 와이파이 일괄 업데이트(v1.2): 버전 표기, USB 업로드·보관, /fw.bin, 한 대씩 OTA, 앱 대화상자 |
 | `cb2954f` | v1.4: 업데이트 중 재업로드 막음 |
+| `3a3b6c0` | v1.5: Ready Board 디자인(레퍼런스 토큰, 5×5, 그리드/카운트, 테마) |
