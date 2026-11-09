@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C6L 버튼 케이스</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="banner" class="banner" hidden></div>
+<div class="app">
+  <aside class="side" id="side">
+    <h1>C6L 버튼 케이스 <small>Unit C6L · 카드형 배터리 · 3버튼 PCB · 3D 프린트</small></h1>
+    <div id="controls"></div>
+    <div class="actions">
+      <button id="btn-reset" type="button">기본값</button>
+      <button id="btn-json" type="button" class="primary">case.json 저장 (Fusion)</button>
+    </div>
+    <div class="exports">
+      <button id="btn-stl-base" type="button">STL · 통</button>
+      <button id="btn-stl-lid" type="button">STL · 뚜껑</button>
+    </div>
+    <p class="note">STL 은 출력 자세(뚜껑은 뒤집힘, 바닥 z=0)로 저장됩니다. Fusion 은 <code>C6LCaseBuild</code> 스크립트 폴더나 다운로드 폴더의 <code>c6l-case.json</code> 을 읽습니다.</p>
+  </aside>
+  <main class="main">
+    <div class="layers" role="group" aria-label="레이어">
+      <label><input type="checkbox" id="ly-base" checked> 통</label>
+      <label><input type="checkbox" id="ly-lid" checked> 뚜껑</label>
+      <label><input type="checkbox" id="ly-ref" checked> 부품(배터리·C6L·PCB)</label>
+      <label>뚜껑 띄우기 <input type="range" id="lift" min="0" max="60" step="1" value="0" aria-label="뚜껑 띄우기"> <span id="lift-n">0</span> mm</label>
+      <span id="status" style="color:var(--mute)"></span>
+    </div>
+    <section class="views">
+      <div class="card wide"><h2>3D <small>드래그 회전 · 휠 확대 · 우클릭 이동</small></h2><div id="v-3d" class="v3d"></div></div>
+      <div class="card"><h2>평면 <small>x–y · 위에서 · 빨강 점선 = 뚜껑 구멍</small></h2><div id="v-top"></div></div>
+      <div class="card"><h2>단면 <small>x–z · 버튼 줄과 C6L 줄 겹쳐 봄</small></h2><div id="v-sec"></div></div>
+    </section>
+    <section class="tables">
+      <div class="card"><h2>요약</h2><div id="t-summary"></div></div>
+      <div class="card"><h2>경고</h2><div id="t-warn"></div></div>
+    </section>
+  </main>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

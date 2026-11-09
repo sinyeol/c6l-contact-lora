@@ -1,0 +1,10 @@
+{
+    "autodeskProduct": "Fusion360",
+    "type": "script",
+    "author": "claude",
+    "description": {
+        "": "Unit C6L + 카드형 배터리 + 3버튼 PCB 케이스 (Base·Lid + STL)"
+    },
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}
