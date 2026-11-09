@@ -36,8 +36,13 @@ python3 -m http.server 8817 -d case
 
 ## Fusion
 
-1. 툴에서 **case.json 저장** → `c6l-case.json` (다운로드 폴더면 그대로 둬도 된다).
-2. `C6LCaseBuild/` 폴더를 맥 `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Scripts/` 에 복사.
+1. 맥에서 스크립트 받기(109 서버에서 Fusion Scripts 폴더로, 한 번만 — 스크립트가 바뀌면 다시):
+
+```bash
+D="$HOME/Library/Application Support/Autodesk/Autodesk Fusion 360/API/Scripts/C6LCaseBuild"; mkdir -p "$D" && for f in C6LCaseBuild.py C6LCaseBuild.manifest c6l-case.json; do curl -fsSo "$D/$f" "http://192.168.1.109:8817/C6LCaseBuild/$f"; done
+```
+
+2. 툴에서 **case.json 저장** → `~/Downloads/c6l-case.json`(브라우저가 붙인 `c6l-case (1).json` 도 찾는다, 가장 최근 것을 쓴다).
 3. Fusion **Shift+S** → `C6LCaseBuild` 실행 → 새 문서에 Lid·Body·Cover·REF_ 부품, `out/` 에 STL.
 
 ## 치수 출처·가정

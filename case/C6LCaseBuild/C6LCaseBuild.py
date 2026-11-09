@@ -1,15 +1,15 @@
 # C6L 버튼 케이스 — 설계툴(case/index.html)이 저장한 c6l-case.json 의 CSG 트리를 Fusion B-rep 으로 만든다.
 # 형상 규칙은 전부 case/core.js 에 있고, 여기서는 box/cyl/frustum/add/sub/and 만 해석한다.
 # Fusion: Shift+S → C6LCaseBuild 실행 → 새 문서에 Lid·Body·Cover(+REF_ 부품), out/ 에 STL(조립 자세).
-# json 찾는 순서: 이 폴더의 c6l-case.json → ~/Downloads/c6l-case.json 중 더 최근 것.
-import os, json, math
+# json: 이 폴더와 ~/Downloads 의 c6l-case*.json(브라우저가 붙이는 " (1)" 포함) 중 가장 최근 것.
+import os, json, math, glob
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SEARCH = [os.path.join(HERE, 'c6l-case.json'), os.path.expanduser('~/Downloads/c6l-case.json')]
+SEARCH = [os.path.join(HERE, 'c6l-case*.json'), os.path.expanduser('~/Downloads/c6l-case*.json')]
 
 
 def find_json():
-    found = [p for p in SEARCH if os.path.exists(p)]
+    found = [p for pat in SEARCH for p in glob.glob(pat)]
     if not found:
         raise FileNotFoundError('c6l-case.json 없음: ' + ', '.join(SEARCH))
     return max(found, key=os.path.getmtime)
