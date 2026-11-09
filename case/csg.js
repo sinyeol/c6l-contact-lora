@@ -1,5 +1,6 @@
 // core.js 의 CSG 트리 → manifold 메시, 그리고 바이너리 STL. 브라우저·node(check.mjs) 공용.
 import Module from './vendor/manifold.js';
+import { expandRslab } from './core.js';
 
 let wasm;
 export async function initCsg() {
@@ -33,6 +34,7 @@ function evalNode(n) {
     const out = m.translate([n.c[0], n.c[1], n.z0]); m.delete();
     return out;
   }
+  if (n.t === 'rslab') return evalNode(expandRslab(n));
   if (n.t === 'torus') {     // 원(반지름 r)을 x=R 에 두고 a0° 부터 90° 만 회전(바깥 모서리 1/4 이면 충분)
     const c0 = wasm.CrossSection.circle(n.r), c1 = c0.translate([n.R, 0]), m = c1.revolve(0, 90), mr = m.rotate([0, 0, n.a0 ?? 0]);
     c0.delete(); c1.delete(); m.delete();

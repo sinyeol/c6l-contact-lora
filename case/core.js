@@ -3,7 +3,7 @@
 // 좌표(mm): X=길이(+X 오른쪽), Y=깊이(+Y 뒤), Z=위. 바닥판 윗면(배터리가 놓이는 면)의 앞-왼쪽 안쪽 모서리가 원점.
 // 부품 3개: Lid(뚜껑, C6L·버튼 PCB 를 밑에 매단다) / Body(벽 + 가운데 격판, 위 칸 = 전자부, 아래 칸 = 배터리)
 //          / Cover(자석 바닥 — 떼어 배터리를 넣고 뺀다). 뚜껑-통은 모서리 기둥의 M3 열삽입 인서트로 볼트 체결.
-// 트리 노드: {t:'box',p:[x0,y0,z0,x1,y1,z1]} | {t:'cyl',a,b,r1,r2} | {t:'frustum',c:[x,y],z0,z1,w0:[wx,wy],off} | {t:'torus',c:[x,y,z],R,r,a0} (Z축, a0° 부터 90° 만 있으면 됨 — Fusion 은 통째로 만든다)
+// 트리 노드: {t:'box',p:[x0,y0,z0,x1,y1,z1]} | {t:'cyl',a,b,r1,r2} | {t:'frustum',c:[x,y],z0,z1,w0:[wx,wy],off} | {t:'torus',c:[x,y,z],R,r,a0} (Z축, a0° 부터 90°) | {t:'rslab',p,R,rt,rb} (둥근 외피)
 //          | {t:'add'|'sub'|'and',c:[…]} (sub = c[0] − 나머지). frustum = z0 에서 w0, z1 에서 사방 off 만큼 넓어지는 사각뿔대
 
 // Unit C6L (docs.m5stack.com U202 Model Size: 24×56×8, SMA 포함 62) — 위치는 Grove 끝 기준
@@ -22,8 +22,8 @@ export const DEFS = [
   ['케이스', 'DIV_T', '가운데 격판 두께', 1.2, 4, 0.1, 'mm', 2],
   ['케이스', 'FLOOR', '바닥판 두께', 1.2, 5, 0.1, 'mm', 2],
   ['케이스', 'R_OUT', '세로 모서리 R', 0.5, 20, 0.5, 'mm', 7],
-  ['케이스', 'TOP_R', '윗면 테두리 R (그립, 세로 R 의 절반까지)', 0, 10, 0.5, 'mm', 3.5],
-  ['케이스', 'BOT_R', '아랫면 테두리 R (그립, 세로 R 의 절반까지)', 0, 10, 0.5, 'mm', 3.5],
+  ['케이스', 'TOP_R', '윗면 테두리 R (그립, 세로 R 보다 작게)', 0, 10, 0.5, 'mm', 3.5],
+  ['케이스', 'BOT_R', '아랫면 테두리 R (그립, 세로 R 보다 작게)', 0, 10, 0.5, 'mm', 3.5],
   ['케이스', 'CLR', '부품 여유(한 면)', 0, 2, 0.1, 'mm', 0.5],
   ['배터리·바닥', 'BAT_L', '배터리 길이', 40, 140, 0.5, 'mm', 99],
   ['배터리·바닥', 'BAT_W', '배터리 폭', 30, 100, 0.5, 'mm', 65],
@@ -119,7 +119,7 @@ export function layout(P) {
   L.c6lUsb = [gx - C6L.USB, cy0 + C6L.W];
   L.plug = [L.c6lUsb[0] - 6, cy0 + C6L.W, L.c6lUsb[0] + 6, cy0 + C6L.W + P.PLUG_L];
   L.outer = [IX + 2 * W, IY + 2 * W, L.IH + P.LID_T + P.FLOOR];
-  L.rT = Math.min(P.TOP_R, P.R_OUT / 2); L.rB = Math.min(P.BOT_R, P.R_OUT / 2);   // 모서리 토러스 큰 반지름 ≥ 작은 반지름
+  L.rT = Math.min(P.TOP_R, P.R_OUT - 0.5); L.rB = Math.min(P.BOT_R, P.R_OUT - 0.5);   // 필렛(Fusion)·토러스(manifold) 모두 세로 R 보다 작아야 한다
   // 볼트 길이: 체결 두께 + 인서트 길이 − 0.5 이하의 표준 길이
   const std = n => [3, 4, 5, 6, 8, 10, 12, 16].filter(v => v <= n).pop() ?? 3;
   L.bolts = { lid: std(P.LID_T - P.LID_CB_H + P.INS3_L - 0.5), pcb: std(PCB.T + P.INS3S_L - 0.5), usbc: std(USBC.FT + P.INS2_L - 0.3) };
@@ -173,7 +173,7 @@ export function check(P, L) {
   if (P.PIN_LEN > C6L.T) warn('레고 핀이 C6L 두께(8mm)보다 김');
   info('ST003 모듈: 사진상 헤더 핀·POWER LED 가 위로 솟아 있어 뚜껑에 닿는다 — 핀을 빼고 선을 직접 납땜, LED 는 눕힐 것');
   info('ST003 모듈: 사진상 둥근 캡(약 Ø11.5)이 끼워져 있다 — 캡을 쓰면 버튼 구멍 Ø12.5, 스위치 높이는 PCB~캡 끝 실측값으로');
-  if (P.TOP_R > L.rT || P.BOT_R > L.rB) info(`테두리 R 은 세로 모서리 R 의 절반(${P.R_OUT / 2}mm)까지 — 그 값으로 맞춤. 더 둥글게 하려면 세로 R 을 키울 것`);
+  if (P.TOP_R > L.rT || P.BOT_R > L.rB) info(`테두리 R 은 세로 모서리 R − 0.5(${P.R_OUT - 0.5}mm)까지 — 그 값으로 맞춤. 더 둥글게 하려면 세로 R 을 키울 것`);
   // 둥근 테두리가 안쪽 공간 모서리에 가장 가까운 곳의 벽 두께
   const rim = (r, t) => r > W2 && r > t ? r - Math.hypot(r - W2, r - t) : Math.min(W2, t);
   const W2 = P.WALL, tTop = rim(L.rT, P.LID_T), tBot = rim(L.rB, P.FLOOR);
@@ -194,8 +194,9 @@ const add = (...c) => ({ t: 'add', c }), sub = (...c) => ({ t: 'sub', c }), and 
 const rbox = (x0, y0, z0, x1, y1, z1, r) => add(box(x0 + r, y0, z0, x1 - r, y1, z1), box(x0, y0 + r, z0, x1, y1 - r, z1),
   ...[x0 + r, x1 - r].flatMap(x => [y0 + r, y1 - r].map(y => cyl([x, y, z0], [x, y, z1], r))));
 const vcyl = ([x, y], z0, z1, r) => cyl([x, y, z0], [x, y, z1], r);
-// 세로 모서리 R + 윗면 테두리 rt + 아랫면 테두리 rb 인 판(rt, rb ≤ R/2). 곧은 테두리 = 눕힌 원기둥, 모서리 = 토러스
-function roundedSlab(x0, y0, z0, x1, y1, z1, R, rt, rb) {
+// rslab 노드 = 세로 모서리 R + 윗면 테두리 rt + 아랫면 테두리 rb 인 판(rt, rb < R). manifold 용 전개:
+// 곧은 테두리 = 눕힌 원기둥, 모서리 = 1/4 토러스. Fusion 은 이 전개를 쓰지 않고 둥근 상자에 필렛 기능을 건다
+export function expandRslab({ p: [x0, y0, z0, x1, y1, z1], R, rt, rb }) {
   const parts = [rbox(x0, y0, z0 + rb, x1, y1, z1 - rt, R)];
   for (const [r, zc, zf] of [[rt, z1 - rt, z1], [rb, z0 + rb, z0]]) {
     if (r <= 0) continue;
@@ -218,7 +219,7 @@ export function model(P) {
   const L = layout(P), warn = check(P, L);
   const { IX, IY, IH, ZD0, ZD1, ZS } = L, W = P.WALL, ri = Math.max(P.R_OUT - W, 0.3), cr = P.COL_D / 2, top = IH + P.LID_T;
   // 바깥 외피 하나(세로 R + 윗면·아랫면 테두리 R)를 높이로 잘라 세 부품에 나눈다 → 곡면이 부품 사이로 이어진다
-  const env = roundedSlab(-W, -W, -P.FLOOR, IX + W, IY + W, top, P.R_OUT, L.rT, L.rB);
+  const env = { t: 'rslab', p: [-W, -W, -P.FLOOR, IX + W, IY + W, top], R: P.R_OUT, rt: L.rT, rb: L.rB };
   const slab = (z0, z1) => and(env, box(-W - 1, -W - 1, z0, IX + W + 1, IY + W + 1, z1));
   const cav = (z0, z1) => rbox(0, 0, z0, IX, IY, z1, ri);
   // 모서리 기둥: 원기둥을 벽 쪽으로 밀어 겹쳐 벽과 한 덩어리로, 안쪽 공간으로 잘라낸다
