@@ -46,9 +46,11 @@ export const DEFS = [
   ['C6L', 'SMA_HOLE_D', 'SMA 홈 지름', 6.4, 8, 0.1, 'mm', 6.8],
   ['C6L', 'ANT_D', '안테나 지름(바깥 파기)', 6, 14, 0.5, 'mm', 10],
   ['C6L', 'SMA_WALL', '안테나 자리 벽 두께', 0.6, 3, 0.1, 'mm', 1],
-  ['C6L', 'PIN_D', '레고 핀 지름(구멍 Ø5)', 4.4, 5, 0.05, 'mm', 4.8],
+  ['C6L', 'PIN_D', '레고 핀 지름(구멍 Ø5, 출력 공차에 맞춰)', 4.4, 5.2, 0.05, 'mm', 4.9],
   ['C6L', 'PIN_LEN', '레고 핀 길이', 2, 8, 0.5, 'mm', 6],
   ['C6L', 'GROVE_CLR', 'Grove 플러그 자리', 0, 25, 1, 'mm', 10],
+  ['C6L', 'C6L_PRESS', '누름 받침 눌림량(뚜껑 닫으면 C6L 을 누름)', 0, 1.5, 0.05, 'mm', 0.3],
+  ['C6L', 'C6L_PAD_D', '누름 받침 지름', 3, 10, 0.5, 'mm', 6],
   ['버튼 PCB', 'PCB_CX', '위치 X (중심, 드래그)', 0, 200, 0.5, 'mm', 62.5],
   ['버튼 PCB', 'PCB_CY', '위치 Y (중심, 드래그)', 0, 120, 0.5, 'mm', 12],
   ['버튼 PCB', 'PCB_ROT', '회전', 0, 270, 90, '', 0, [[0, '0° (헤더 뒤)'], [90, '90°'], [180, '180° (헤더 앞)'], [270, '270°']]],
@@ -89,12 +91,14 @@ export function layout(P) {
   L.ZS = Math.min(Math.max(P.SEAM_H, 0), L.ZD0);        // 바닥-통 이음 높이
   const cr = P.COL_D / 2;
   L.cols = [[cr, cr], [IX - cr, cr], [IX - cr, IY - cr], [cr, IY - cr]];
-  // C6L: SMA 끝이 -X 벽(안테나 밖), Y 는 드래그
-  const cx0 = P.CLR, cy = P.C6L_Y, cy0 = cy - C6L.W / 2, gx = cx0 + C6L.L;
+  // C6L: SMA 끝을 -X 벽에 붙인다(안테나를 조이면 벽을 사이에 두고 C6L 이 당겨져 고정), Y 는 드래그
+  const cx0 = 0, cy = P.C6L_Y, cy0 = cy - C6L.W / 2, gx = cx0 + C6L.L;
   Object.assign(L, { c6l: [cx0, cy0, gx, cy0 + C6L.W], grove_x: gx,
     sma: [-1, 1].map(s => [cy + s * C6L.SMA_DX, L.IH - P.SMA_FROM_FRONT]),
     pins: [-1, 1].map(s => [gx - C6L.LEGO, cy + s * C6L.LEGO_DX]),
-    oled: [gx - C6L.OLED, cy], ubtn: [gx - C6L.UBTN, cy] });
+    oled: [gx - C6L.OLED, cy], ubtn: [gx - C6L.UBTN, cy],
+    // 격판 누름 받침: 뒷면 나사(가운데 줄)·레고 구멍을 피해 네 군데
+    c6lPads: [cx0 + 10, gx - 24].flatMap(x => [-1, 1].map(s => [x, cy + s * 7])) });
   L.maskOff = Math.max(P.LID_T - P.MASK_T, 0) / Math.tan(P.MASK_SLOPE * Math.PI / 180);
   // 버튼 PCB: 0° = 헤더 쪽이 뒤(+Y). PCB 로컬(u = 길이, v = 폭, v 큰 쪽 = 헤더)을 중심 기준으로 회전
   const a = P.PCB_ROT * Math.PI / 180, ca = Math.round(Math.cos(a)), sa = Math.round(Math.sin(a)), pc = [P.PCB_CX, P.PCB_CY];
@@ -139,6 +143,8 @@ export function check(P, L) {
     if (cols.some(c => overlap(c, r))) err(`${n} 가 모서리 기둥과 겹침`);
   }
   if (overlap(c6lZone, L.pcb)) err('C6L 과 버튼 PCB 가 겹침');
+  for (const p of L.c6lPads) for (const r of [u.mode === 0 ? u.flange : null, u.mode === 2 ? u.cable : null].filter(Boolean))
+    if (overlap(sq(p, P.C6L_PAD_D), r)) { warn('C6L 누름 받침이 격판 USB-C 자리와 겹침 — 그 받침은 빠진다'); break; }
   if (u.mode === 0) {
     for (const r of [c6lZone, L.pcb]) if (overlap(r, u.body)) warn('USB-C 커넥터 몸통이 C6L/PCB 밑에 있음 — 높이·배선 확인');
     if (overlap(u.flange, L.bat)) err('USB-C 커넥터가 배터리 위에 있음 — 아래에서 케이블을 꽂을 자리가 없다. 케이블 자리(+X) 쪽으로');
@@ -155,7 +161,7 @@ export function check(P, L) {
   if (Math.abs(L.oled[0] - L.ubtn[0]) < mx + P.UBTN_D / 2 + 0.8) warn('OLED 마스크 경사가 C6L 버튼 구멍에 닿음');
   if (2 * C6L.SMA_DX <= P.ANT_D) err('안테나 자리 두 개가 서로 겹침');
   if (L.sma[0][1] + P.ANT_D / 2 > L.IH) info('안테나 자리가 벽 윗선까지 올라감 — 벽 위가 살짝 파인다(뚜껑이 덮음)');
-  const thread = C6L.SMA_LEN - P.CLR - P.SMA_WALL;
+  const thread = C6L.SMA_LEN - P.SMA_WALL;
   if (thread < 4) warn(`SMA 나사가 벽 밖으로 ${thread.toFixed(1)}mm 만 나옴(4mm 이상 권장)`);
   if (P.SMA_WALL >= P.WALL) warn('안테나 자리 벽이 벽 두께 이상 — 파기 효과 없음');
   const colH = L.IH - L.ZS;
@@ -223,10 +229,11 @@ export function model(P) {
   const magnet = (c, zFace, up) => vcyl(c, up ? zFace - 1 : zFace - P.MAG_T - 0.2, up ? zFace + P.MAG_T + 0.2 : zFace + 1, P.MAG_D / 2 + 0.1);
 
   // Body: 벽(ZS~IH) + 격판 + 기둥(위 = M3 인서트, 아래 = 자석) + USB-C 자리
-  const u = L.usbc;
+  const u = L.usbc, usbHoles = u.mode === 0 ? [u.flange] : u.mode === 2 ? [u.cable] : [];
   const body = sub(
     add(sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
       cav(ZD0, ZD1),
+      ...L.c6lPads.filter(p => !usbHoles.some(r => overlap(sq(p, P.C6L_PAD_D), r))).map(p => vcyl(p, ZD1 - 0.1, IH - C6L.T + P.C6L_PRESS, P.C6L_PAD_D / 2)),
       ...L.cols.map(c => column(c, ZS, IH)),
       ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : [])),
     ...L.cols.map(c => vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2)),

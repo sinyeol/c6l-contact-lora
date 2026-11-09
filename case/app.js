@@ -113,6 +113,7 @@ function topSvg(L) {
   s += `<path class="wall" d="${rr(-W, -W, L.IX + W, L.IY + W, P.R_OUT, fy)} ${rr(0, 0, L.IX, L.IY, ri, fy)}"/>`;
   s += rect(L.bat, 'part bat') + lbl((L.bat[0] + L.bat[2]) / 2, L.bat[1] + 3, '배터리(격판 밑)');
   for (const cc of L.cols) s += circ(cc, P.COL_D, 'boss') + circ(cc, P.MAG_D, 'mag');
+  for (const p of L.c6lPads) s += circ(p, P.C6L_PAD_D, 'boss');       // 격판 누름 받침(C6L 밑)
   if (u.mode === 0) s += `<g data-drag="usbc">${rect(u.flange, 'part usb')}${rect(u.slot, 'cut')}${u.holes.map(h => circ(h, 1.8, 'boss')).join('')}${lbl(u.c[0], u.flange[1] - 3.5, 'USB-C')}</g>`;
   if (u.mode === 2) {
     const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2;
@@ -157,6 +158,7 @@ function secSvg(L) {
   s += `<path class="lidp" d="M${-W},${fz(IH)} H${mx - wx} V${fz(IH + P.MASK_T)} L${mx - wx - o},${fz(top)} H${-W} Z M${mx + wx},${fz(IH)} H${IX + W} V${fz(top)} H${mx + wx + o} L${mx + wx},${fz(IH + P.MASK_T)} Z"/>`;
   s += rect(L.bat[0], 0, L.bat[2], P.BAT_T, 'part bat');
   const c = L.c6l, p = L.pcb, pz = IH - L.PCB_GAP - PCB.T, u = L.usbc;
+  for (const [x] of L.c6lPads) s += rect(x - P.C6L_PAD_D / 2, ZD1, x + P.C6L_PAD_D / 2, IH - C6L.T + P.C6L_PRESS, 'boss');
   s += rect(c[0], IH - C6L.T, c[2], IH, 'part c6l') + rect(c[0] - C6L.SMA_LEN, L.sma[0][1] - 3.2, c[0], L.sma[0][1] + 3.2, 'part c6l');
   s += rect(p[0], pz, p[2], pz + PCB.T, 'part pcb');
   for (const [x] of L.keysAll) s += rect(x - 6, pz + PCB.T, x + 6, pz + PCB.T + 3.5, 'part sw') + rect(x - 1.75, pz + PCB.T, x + 1.75, pz + PCB.T + P.SW_H, 'part sw');
