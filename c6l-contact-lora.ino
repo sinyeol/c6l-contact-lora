@@ -139,8 +139,13 @@ void nodeLoop() {
 struct Node { bool seen; uint32_t seenMs; uint8_t bits, c1, c2; int16_t rssi; };
 Node nodes[N_NODES + 1];
 
+String stateJson();
+void pushState() { Serial.printf("S %s\n", stateJson().c_str()); }  // USB 앱(Web Serial)용 상태 한 줄
+
 void gwLoop() {
   web.handleClient();
+  static uint32_t lastPush = 0;
+  if (millis() - lastPush >= 1000) { lastPush = millis(); pushState(); }  // 경과 시간·끊김 갱신용
   if (!radioIrq) return;
   radioIrq = false;
   uint8_t p[7];
@@ -152,11 +157,13 @@ void gwLoop() {
     radio.transmit(ack, sizeof ack);
     radioIrq = false;  // 송신 완료 인터럽트 무시
     Serial.printf("rx id=%u seq=%u bits=%u c=%u/%u rssi=%d\n", p[2], p[3], p[4], p[5], p[6], nodes[p[2]].rssi);
+    pushState();  // 바뀐 상태를 USB 앱에 바로
+    lastPush = millis();
   }
   radio.startReceive();
 }
 
-void handleState() {  // [null | {a:경과초, b:비트, c1, c2, r:RSSI}] × 25
+String stateJson() {  // [null | {a:경과초, b:비트, c1, c2, r:RSSI}] × 25 — 웹 /s 와 USB "S " 줄이 같이 쓴다
   String s = "[";
   char buf[64];
   uint32_t now = millis();
@@ -169,8 +176,9 @@ void handleState() {  // [null | {a:경과초, b:비트, c1, c2, r:RSSI}] × 25
     s += buf;
   }
   s += ']';
-  web.send(200, "application/json", s);
+  return s;
 }
+void handleState() { web.send(200, "application/json", stateJson()); }
 
 // ---- 버튼으로 ID 설정 ----
 bool editing = false, btnPrev = false, holdFired = false;

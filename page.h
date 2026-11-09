@@ -1,14 +1,19 @@
 #pragma once
-// 수신기가 태블릿에 주는 상태 페이지. /s 를 300ms 마다 읽어 25칸을 제자리에서 갱신한다.
+// 접점 상태 페이지 — 한 파일로 두 가지 방식:
+//  · 수신기 Wi-Fi(http://192.168.4.1) 로 열면 /s 를 300ms 마다 읽는다.
+//  · 그 밖(https·파일)으로 열면 수신기 USB 를 Web Serial 로 열어 "S [...]" 줄을 받는다.
+// web/index.html 은 이 문자열을 tools/export_web.py 로 꺼낸 사본이다(직접 고치지 말 것).
 const char PAGE[] = R"html(<!doctype html>
 <html lang="ko"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>접점 상태</title>
 <style>
-:root{color-scheme:dark;--bg:#111418;--tile:#1c2128;--line:#2d333b;--fg:#e6edf3;--mut:#8b949e;--on:#238636;--warn:#d29922}
+:root{color-scheme:dark;--bg:#111418;--tile:#1c2128;--line:#2d333b;--fg:#e6edf3;--mut:#8b949e;--on:#238636;--stb:#da3633;--warn:#d29922;--btn:#1f6feb}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.3 system-ui,sans-serif}
-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px}
 h1{font-size:18px;margin:0}
+.r{display:flex;align-items:center;gap:10px}
+button{font:inherit;color:#fff;background:var(--btn);border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
 #g{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;padding:0 16px 16px}
 @media (max-width:700px){#g{grid-template-columns:repeat(3,1fr)}}
 .t{background:var(--tile);border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0}
@@ -17,40 +22,91 @@ h1{font-size:18px;margin:0}
 .h b{font-size:22px}
 .m{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .p{display:flex;gap:6px;align-items:center;margin-top:6px;padding:6px 8px;border-radius:6px;background:#0d1117}
-.p.on{background:var(--on);color:#fff}
+.p.on{color:#fff}
+.p1.on{background:var(--on)}
+.p2.on{background:var(--stb)}
 .v{font-weight:700}
 .c{margin-left:auto;font-size:13px;opacity:.8}
 #st.bad{color:var(--warn)}
 </style></head><body>
-<header><h1>접점 상태</h1><span id="st">연결 중…</span></header>
+<header><h1>접점 상태</h1><div class="r"><span id="st">연결 중…</span><button id="cn" hidden>USB 연결</button></div></header>
 <main id="g"></main>
 <script>
-const N=25,OFF=75,g=document.getElementById('g'),st=document.getElementById('st'),tiles=[];
+const N=25,OFF=75,g=document.getElementById('g'),st=document.getElementById('st'),cn=document.getElementById('cn'),tiles=[];
 for(let i=1;i<=N;i++){
   const t=document.createElement('div');t.className='t off';
   t.innerHTML=`<div class="h"><b>${String(i).padStart(2,'0')}</b><span class="m">대기</span></div>`+
-    [1,2].map(k=>`<div class="p"><span>접점${k}</span><span class="v">-</span><span class="c"></span></div>`).join('');
+    [1,2].map(k=>`<div class="p p${k}"><span>${k==1?'READY':'STANDBY'}</span><span class="v">-</span><span class="c"></span></div>`).join('');  // 접점1 = READY(초록), 접점2 = STANDBY(빨강)
   g.append(t);tiles.push(t);
 }
 const ago=s=>s<60?s+'초':s<3600?Math.floor(s/60)+'분':Math.floor(s/3600)+'시간';
-async function tick(){
-  try{
-    const d=await (await fetch('/s',{cache:'no-store'})).json();
-    let on=0;
-    d.forEach((n,i)=>{
-      const t=tiles[i],live=!!n&&n.a<OFF;on+=live;
-      t.classList.toggle('off',!live);
-      t.querySelector('.m').textContent=!n?'대기':live?`${n.a}초 전 · ${n.r}dBm`:`끊김 ${ago(n.a)}`;
-      t.querySelectorAll('.p').forEach((p,k)=>{
-        const c=!!n&&(n.b>>k&1)===1;
-        p.classList.toggle('on',c);
-        p.querySelector('.v').textContent=!n?'-':c?'ON':'OFF';
-        p.querySelector('.c').textContent=n?'×'+n['c'+(k+1)]:'';
-      });
+const say=(txt,bad)=>{st.textContent=txt;st.className=bad?'bad':''};
+let last=0;
+function render(d){  // d = [null | {a,b,c1,c2,r}] × 25
+  let on=0;last=Date.now();
+  d.forEach((n,i)=>{
+    const t=tiles[i],live=!!n&&n.a<OFF;on+=live;
+    t.classList.toggle('off',!live);
+    t.querySelector('.m').textContent=!n?'대기':live?`${n.a}초 전 · ${n.r}dBm`:`끊김 ${ago(n.a)}`;
+    t.querySelectorAll('.p').forEach((p,k)=>{
+      const c=!!n&&(n.b>>k&1)===1;
+      p.classList.toggle('on',c);
+      p.querySelector('.v').textContent=!n?'-':c?'ON':'OFF';
+      p.querySelector('.c').textContent=n?'×'+n['c'+(k+1)]:'';
     });
-    st.textContent=`연결 ${on}/${N}`;st.className='';
-  }catch(e){st.textContent='수신기 연결 끊김';st.className='bad'}
-  setTimeout(tick,300);
+  });
+  say(`연결 ${on}/${N}`);
 }
-tick();
+
+// ---- Wi-Fi: 수신기가 이 페이지를 직접 줄 때 ----
+async function poll(){
+  try{render(await (await fetch('/s',{cache:'no-store'})).json())}catch(e){say('수신기 연결 끊김',true)}
+  setTimeout(poll,300);
+}
+
+// ---- USB: Web Serial (안드로이드 구버전은 WebUSB 폴리필) ----
+const open=new Set();
+async function serialApi(){
+  if(navigator.serial)return navigator.serial;
+  if(navigator.usb)return (await import('https://cdn.jsdelivr.net/npm/web-serial-polyfill@1.0.15/+esm')).serial;
+  return null;
+}
+async function run(port){
+  if(open.has(port))return;
+  open.add(port);
+  try{
+    await port.open({baudRate:115200});
+    await port.setSignals({dataTerminalReady:false,requestToSend:false});  // DTR 이 켜진 채 리셋되면 다운로드 모드로 멈춘다
+    const reader=port.readable.pipeThrough(new TextDecoderStream()).getReader();
+    let buf='';
+    for(;;){
+      const {value,done}=await reader.read();
+      if(done)break;
+      buf+=value;
+      let i;
+      while((i=buf.indexOf('\n'))>=0){
+        const line=buf.slice(0,i).trim();buf=buf.slice(i+1);
+        if(line.startsWith('S ['))try{render(JSON.parse(line.slice(2)))}catch(e){}
+      }
+      if(buf.length>8192)buf='';
+    }
+  }catch(e){}
+  try{await port.close()}catch(e){}
+  open.delete(port);
+  if(!open.size){say('USB 끊김 — 다시 꽂거나 [USB 연결]',true);cn.hidden=false}
+}
+async function usb(){
+  const api=await serialApi();
+  if(!api){say('이 브라우저는 USB 시리얼을 지원하지 않습니다 (PC 크롬·엣지, 안드로이드 크롬)',true);return}
+  cn.hidden=false;
+  cn.onclick=async()=>{try{run(await api.requestPort({filters:[{usbVendorId:0x303a}]}))}catch(e){}};
+  const ports=api.getPorts?await api.getPorts():[];
+  ports.forEach(run);  // 전에 허락한 포트는 바로 연결 (S 줄을 주는 포트가 수신기)
+  if(ports.length)cn.hidden=true;
+  api.addEventListener?.('connect',e=>run(e.target||e.port));
+  say(ports.length?'USB 연결 중…':'[USB 연결]을 눌러 수신기를 고르세요',!ports.length);
+  setInterval(()=>{if(open.size&&last&&Date.now()-last>3000)say('수신기 응답 없음',true)},1000);
+}
+
+location.protocol==='http:'?poll():usb();
 </script></body></html>)html";
