@@ -43,7 +43,10 @@ export const DEFS = [
   ['배터리·바닥', 'COL_D', '모서리 기둥 지름', 7, 14, 0.5, 'mm', 9.5],
   ['배터리·바닥', 'MAG_D', '자석 지름', 3, 10, 0.5, 'mm', 6],
   ['배터리·바닥', 'MAG_T', '자석 두께', 1, 5, 0.5, 'mm', 3],
-  ['배터리·바닥', 'NOTCH_R', '손가락 구멍·홈 반지름 (끼움형: 바닥판 구멍, 적층형: 이음선 홈)', 3, 12, 0.5, 'mm', 7],
+  ['배터리·바닥', 'NOTCH_R', '손가락 구멍·홈 반지름 (끼움형: 바닥판 반달 구멍, 적층형: 이음선 홈)', 3, 15, 0.5, 'mm', 7],
+  ['배터리·바닥', 'PULL_X', '손가락 구멍 위치 X (반달 곧은 변 중심, 드래그)', 0, 200, 0.5, 'mm', 62.75],
+  ['배터리·바닥', 'PULL_Y', '손가락 구멍 위치 Y', 0, 120, 0.5, 'mm', 10],
+  ['배터리·바닥', 'PULL_DIR', '손가락 구멍 둥근 쪽', 0, 270, 90, '', 270, [[270, '앞 (−Y)'], [90, '뒤 (+Y)'], [180, '−X'], [0, '+X']]],
   ['C6L', 'C6L_Y', '위치 Y (중심, 드래그)', 0, 120, 0.5, 'mm', 44.5],
   ['C6L', 'OLED_WX', 'OLED 창 X(길이 방향)', 8, 16, 0.5, 'mm', 11],
   ['C6L', 'OLED_WY', 'OLED 창 Y', 10, 20, 0.5, 'mm', 15],
@@ -159,7 +162,10 @@ export function layout(P) {
   // 끼움 판: 통 구멍 귀퉁이 rP, 판 귀퉁이 rP − FIT, 둘레 테두리 R 은 판 귀퉁이 R·판 두께보다 0.5 작게(뚜껑 eL, 바닥 eC)
   L.rP = Math.min(P.PLATE_R, Math.min(L.IX, L.IY) / 2 - 1);
   const rpp = Math.max(L.rP - P.FIT, 0.3);
-  L.pull = [L.IX / 2, P.FIT + P.NOTCH_R + 3];   // 끼움형 바닥판 손가락 구멍(앞쪽 가장자리 가까이 — 손끝을 넣어 당긴다)
+  // 끼움형 바닥판 반달 손가락 구멍: c = 곧은 변 중심, v = 둥근 쪽 방향. 곧은 변에 손끝을 걸어 당긴다. box = 반달을 감싸는 평면 사각형
+  { const c = [P.PULL_X, P.PULL_Y], r = P.NOTCH_R, v = [Math.round(Math.cos(P.PULL_DIR * Math.PI / 180)), Math.round(Math.sin(P.PULL_DIR * Math.PI / 180))];
+    const lo = i => v[i] > 0 ? c[i] : c[i] - r, hi = i => v[i] < 0 ? c[i] : c[i] + r;
+    L.pull = { c, r, v, box: [lo(0), lo(1), hi(0), hi(1)] }; }
   L.eL = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.LID_T - 0.5), 0); L.eC = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.FLOOR - 0.5), 0);   // 필렛(Fusion)·토러스(manifold) 모두 세로 R 보다 작아야 한다
   // 볼트 길이: 체결 두께 + 인서트 길이 − 0.5 이하의 표준 길이
   const std = n => [3, 4, 5, 6, 8, 10, 12, 16].filter(v => v <= n).pop() ?? 3;
@@ -209,6 +215,11 @@ export function check(P, L) {
     if (side > USBC.FL / 2) warn(`케이블 구멍이 커넥터 정면에서 옆으로 ${side.toFixed(1)}mm 벗어남`);
     if (P.USBW_T < P.INS2_L + 1) err(`받침벽 두께 ${P.USBW_T}mm 가 M2 인서트(${P.INS2_L}) + 1 보다 얇음`);
     info(`세운 USB-C(뚜껑 밑): 커넥터가 뚜껑과 함께 열린다 — 배터리 케이블 플러그를 구멍(${P.CBL_L}×${P.CBL_W})으로 올려 꽂은 뒤 뚜껑을 닫으므로 케이블이 뚜껑을 들 만큼 길어야 한다. 받침벽 뒤 양끝 리브가 미는 힘을 받는다`);
+  }
+  if (P.JOINT === 1) {
+    const b = L.pull.box, m = P.FIT + 1;
+    if (b[0] < m || b[1] < m || b[2] > L.IX - m || b[3] > L.IY - m) err('바닥 손가락 구멍이 바닥판 가장자리를 벗어남 — 위치·크기를 바꿀 것');
+    else if (cols.some(c => overlap(c, b))) err('바닥 손가락 구멍이 모서리 자석 기둥과 겹침');
   }
   if (u.mode === 1) info('배터리 → C6L 전원 경로 없음(격판에 구멍 없음)');
   for (const k of L.keys) for (const s of L.stand)
@@ -325,8 +336,9 @@ export function model(P) {
 
   let cover;
   if (J) {
-    // 손가락 구멍: 바닥판 앞쪽을 뚫고 바깥 모서리를 0.8 깎는다 → 손끝을 넣어 바닥을 당긴다(옆으로 튀어나온 혀는 부러져서 없앰)
-    const [px, py] = L.pull, pull = [vcyl(L.pull, -P.FLOOR - 1, 1, P.NOTCH_R), cyl([px, py, -P.FLOOR - 1], [px, py, -P.FLOOR + 0.8], P.NOTCH_R + 1.8, P.NOTCH_R)];
+    // 반달 손가락 구멍(위치·크기·둥근 쪽 조절): 바깥 모서리를 0.8 깎는다 → 곧은 변에 손끝을 걸어 바닥을 당긴다(옆으로 튀어나온 혀는 부러져서 없앰)
+    const { c: [px, py], r, v } = L.pull, e = r + 3, half = box(v[0] > 0 ? px : px - e, v[1] > 0 ? py : py - e, -P.FLOOR - 2, v[0] < 0 ? px : px + e, v[1] < 0 ? py : py + e, 2);
+    const pull = [and(add(vcyl([px, py], -P.FLOOR - 1, 1, r), cyl([px, py, -P.FLOOR - 1], [px, py, -P.FLOOR + 0.8], r + 1.8, r)), half)];   // 반달 + 바깥 모서리 0.8 모따기
     // Cover: 통 아랫구멍에 끼우는 판 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
     cover = sub(add(and(env, plate(-P.FLOOR, 0, 0, L.eC)), ...(ZS > 0.5 ? L.cols.map(c => column(c, -0.5, ZS, plug(-0.5, ZS))) : [])),
       ...L.cols.map(c => magnet(c, ZS, false)), ...pull);
