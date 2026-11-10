@@ -13,7 +13,7 @@ export const PCB = { L: 66.04, W: 22.352, T: 1.6, HX: (66.04 - 59.944) / 2, HY: 
   KEYS: [12.70, 33.02, 53.34], KEY_FROM_TOP: 12.5 };
 // 패널형 USB-C (JRC-C009, 사진 치수: 플랜지 20×7, 몸통 폭 9). 구멍 간격·두께는 사진 비례 추정
 export const USBC = { FL: 20, FH: 7, FT: 1, HOLE_P: 16.5, BODY_L: 5.3, BODY_W: 9, BODY_T: 3.6 };
-const USBC_PLUG_W = 12.4, USBC_PLUG_T = 6.5;   // 배터리 케이블 USB-C 플러그 몰드(일반 규격 근사)
+const USBW_RIB = 6, USBW_RIB_T = 3;   // 세운 받침벽 뒷면 양끝 리브(길이·두께) — 플러그를 꽂을 때 미는 힘을 받는다
 export const M3_CLEAR = 3.4;
 const RIB_R = 1.5;   // 배터리 누름 리브 끝 반지름
 const ANT_HUB = 12;  // 휩 안테나 나사·꺾임 마디 길이(사진 비례)
@@ -75,7 +75,9 @@ export const DEFS = [
   ['USB-C 전원', 'USBC_CX', '위치 X (중심, 세움: 케이블 구멍 중심, 드래그)', 0, 200, 0.5, 'mm', 117.5],
   ['USB-C 전원', 'USBC_CY', '위치 Y (중심, 드래그)', 0, 120, 0.5, 'mm', 36],
   ['USB-C 전원', 'USBC_ROT', '방향', 0, 90, 90, '', 90, [[0, '길게 X (세움: 플러그 +Y 로 꽂음)'], [90, '길게 Y (세움: 플러그 +X 로 꽂음)']]],
-  ['USB-C 전원', 'USBC_PLUG', '세움: 커넥터 면 ~ 케이블 구멍 중심(플러그+꺾임 길이)', 10, 40, 0.5, 'mm', 18],
+  ['USB-C 전원', 'USBW_CX', '세움: 받침벽 위치 X (커넥터 면 중심, 드래그)', 0, 200, 0.5, 'mm', 99.5],
+  ['USB-C 전원', 'USBW_CY', '세움: 받침벽 위치 Y', 0, 120, 0.5, 'mm', 36],
+  ['USB-C 전원', 'USBW_T', '세움: 받침벽 두께', 3, 10, 0.5, 'mm', 5],
   ['USB-C 전원', 'USBC_SLOT_W', '커넥터: 격판 구멍 길이(몸통 9)', 9, 12, 0.1, 'mm', 9.6],
   ['USB-C 전원', 'USBC_SLOT_T', '커넥터: 격판 구멍 폭(몸통 두께)', 3, 6, 0.1, 'mm', 4.2],
   ['USB-C 전원', 'CBL_L', '케이블 구멍 길이(플러그 통과)', 8, 80, 0.5, 'mm', 14],
@@ -134,16 +136,19 @@ export function layout(P) {
   L.usbc = { mode: P.USB_MODE, c, flange: r2(USBC.FL, USBC.FH), slot: r2(P.USBC_SLOT_W, P.USBC_SLOT_T), body: r2(USBC.BODY_W, USBC.BODY_T),
     cable: r2(P.CBL_L, P.CBL_W), long: P.USBC_ROT ? 'y' : 'x',
     holes: [-1, 1].map(s => [c[0] + s * ax[0] * USBC.HOLE_P / 2, c[1] + s * ax[1] * USBC.HOLE_P / 2]) };
-  // 세움(3): 격판 위 받침벽에 커넥터를 90° 로 세워 플랜지 면이 케이블 구멍(c) 쪽을 본다. 플러그는 격판 위에 누워 꽂히고 꼬리에서 케이블이 구멍으로 내려간다
+  // 세움(3): 격판 위 받침벽(f = 커넥터 면 중심)에 커넥터를 90° 로 세운다. 케이블 구멍(c)은 따로 위치를 잡고, 플랜지 면은 구멍 쪽을 본다
   if (P.USB_MODE === 3) {
-    const d = P.USBC_ROT ? [1, 0] : [0, 1], f = [c[0] - d[0] * P.USBC_PLUG, c[1] - d[1] * P.USBC_PLUG], bt = P.INS2_L + 1.2;
+    const f = [P.USBW_CX, P.USBW_CY], d0 = P.USBC_ROT ? [1, 0] : [0, 1], sg = Math.sign((c[0] - f[0]) * d0[0] + (c[1] - f[1]) * d0[1]) || 1;
+    const d = d0.map(v => v * sg), bt = P.USBW_T, h = USBC.FL / 2 + 1;
     // 커넥터 면(f)에서 플러그 쪽으로 a~b, 옆으로 ±h 인 평면 사각형
     const sp = (a, b, h) => { const q = [[a, -h], [b, h]].map(([s, t]) => [f[0] + d[0] * s + ax[0] * t, f[1] + d[1] * s + ax[1] * t]);
       return [Math.min(q[0][0], q[1][0]), Math.min(q[0][1], q[1][1]), Math.max(q[0][0], q[1][0]), Math.max(q[0][1], q[1][1])]; };
     const zc = L.ZD1 + USBC.FH / 2, at = (s, t) => [f[0] + d[0] * s + ax[0] * t, f[1] + d[1] * s + ax[1] * t, zc];
-    L.usbc.stand = { zc, zTop: Math.min(L.ZD1 + USBC.FH + 1, L.IH - 0.3), flange: sp(-USBC.FT, 0, USBC.FL / 2),
-      bracket: sp(-USBC.FT - bt, -USBC.FT, USBC.FL / 2 + 1), body: sp(-USBC.FT - USBC.BODY_L, -USBC.FT, USBC.BODY_W / 2),
-      slot: sp(-USBC.FT - bt - 1, 0.1, P.USBC_SLOT_W / 2), plug: sp(0, P.USBC_PLUG, USBC_PLUG_W / 2),
+    const back = -USBC.FT - bt, ribs = [-1, 1].map(k => { const r = sp(back - USBW_RIB, back + 0.1, USBW_RIB_T / 2), o = k * (h - USBW_RIB_T / 2);
+      return [r[0] + ax[0] * o, r[1] + ax[1] * o, r[2] + ax[0] * o, r[3] + ax[1] * o]; });
+    L.usbc.stand = { f, d, zc, zTop: Math.min(L.ZD1 + USBC.FH + 1, L.IH - 0.3), flange: sp(-USBC.FT, 0, USBC.FL / 2),
+      bracket: sp(back, -USBC.FT, h), ribs, foot: sp(back - USBW_RIB, -USBC.FT, h), body: sp(-USBC.FT - USBC.BODY_L, -USBC.FT, USBC.BODY_W / 2),
+      slot: sp(back - 1, 0.1, P.USBC_SLOT_W / 2),
       ins: [-1, 1].map(k => [at(-USBC.FT + 0.1, k * USBC.HOLE_P / 2), at(-USBC.FT - P.INS2_L - 0.3, k * USBC.HOLE_P / 2)]) };
   }
   // C6L 자체 USB-C: +Y 쪽 긴 면, Grove 끝에서 20.3. 케이블 구멍 방식이면 그 옆에 플러그 자리가 필요
@@ -174,13 +179,13 @@ export function check(P, L) {
   const u = L.usbc, parts = [['C6L(+Grove)', c6lZone], ['버튼 PCB', L.pcb]];
   if (u.mode === 0) parts.push(['USB-C 커넥터', u.flange]);
   if (u.mode === 2) parts.push(['케이블 구멍', u.cable]);
-  if (u.mode === 3) parts.push(['케이블 구멍', u.cable], ['세운 USB-C 받침', u.stand.bracket], ['USB-C 플러그', u.stand.plug]);
+  if (u.mode === 3) parts.push(['케이블 구멍', u.cable], ['세운 USB-C 받침벽', u.stand.foot]);
   for (const [n, r] of parts) {
     if (!inside(r, L)) err(`${n} 가 안쪽을 벗어남`);
     if (cols.some(c => overlap(c, r))) err(`${n} 가 모서리 기둥과 겹침`);
   }
   if (overlap(c6lZone, L.pcb)) err('C6L 과 버튼 PCB 가 겹침');
-  for (const p of L.c6lPads) for (const r of [u.mode === 0 ? u.flange : null, u.mode >= 2 ? u.cable : null, u.stand?.bracket].filter(Boolean))
+  for (const p of L.c6lPads) for (const r of [u.mode === 0 ? u.flange : null, u.mode >= 2 ? u.cable : null, u.stand?.foot].filter(Boolean))
     if (overlap(sq(p, P.C6L_PAD_D), r)) { warn('C6L 누름 받침이 격판 USB-C 자리와 겹침 — 그 받침은 빠진다'); break; }
   if (u.mode === 0) {
     for (const r of [c6lZone, L.pcb]) if (overlap(r, u.body)) warn('USB-C 커넥터 몸통이 C6L/PCB 밑에 있음 — 높이·배선 확인');
@@ -193,14 +198,17 @@ export function check(P, L) {
       err(`C6L USB-C 옆(+Y) 플러그 자리 ${P.PLUG_L}mm 가 막힘 — C6L 을 앞(−Y)으로 옮기거나 PCB 를 비킬 것`);
   }
   if (u.mode === 3) {
-    const st = u.stand, foot = [st.bracket, st.plug];
+    const st = u.stand, foot = [st.foot];
     if (L.IH - L.ZD1 < USBC.FH + 0.3) err(`전자부 높이 ${(L.IH - L.ZD1).toFixed(1)}mm 가 세운 USB-C 플랜지(${USBC.FH})보다 낮음`);
     if (foot.some(r => overlap(r, c6lZone) || overlap(r, L.pcb) || L.stand.some(s => overlap(sq(s, P.STANDOFF_D), r))))
-      err('세운 USB-C 받침·플러그 자리가 C6L/버튼 PCB 와 겹침 — 위치(드래그)·플러그 길이를 바꿀 것');
+      err('세운 USB-C 받침벽이 C6L/버튼 PCB 와 겹침 — 받침벽 위치(드래그)를 바꿀 것');
     if (overlap(u.cable, L.bat)) warn('케이블 구멍이 배터리 위에 있음 — 배터리 위 틈으로 케이블이 지나가야 한다. 케이블 자리(+X) 쪽으로');
     if (L.stops.some(r => overlap(r, u.cable))) warn('케이블 구멍이 배터리 멈춤턱과 겹침');
-    if (P.USBC_PLUG < (P.USBC_ROT ? P.CBL_W : P.CBL_L) / 2 + 2) warn('케이블 구멍이 커넥터 면에 너무 가까움 — 플러그 길이를 늘릴 것');
-    info(`세운 USB-C: 뚜껑을 열고 배터리 케이블 플러그를 구멍(${P.CBL_L}×${P.CBL_W})으로 올려 옆으로 꽂는다. 플러그 몰드 ${USBC_PLUG_W}×${USBC_PLUG_T} 가정`);
+    const c = u.c, ahead = (c[0] - st.f[0]) * st.d[0] + (c[1] - st.f[1]) * st.d[1], side = Math.abs((c[0] - st.f[0]) * st.d[1] - (c[1] - st.f[1]) * st.d[0]);
+    if (ahead < (P.USBC_ROT ? P.CBL_W : P.CBL_L) / 2 + 10) warn(`케이블 구멍이 커넥터 면에서 ${ahead.toFixed(1)}mm — 플러그(약 15~20)가 누울 자리가 부족할 수 있다`);
+    if (side > USBC.FL / 2) warn(`케이블 구멍이 커넥터 정면에서 옆으로 ${side.toFixed(1)}mm 벗어남`);
+    if (P.USBW_T < P.INS2_L + 1) err(`받침벽 두께 ${P.USBW_T}mm 가 M2 인서트(${P.INS2_L}) + 1 보다 얇음`);
+    info(`세운 USB-C: 뚜껑을 열고 배터리 케이블 플러그를 구멍(${P.CBL_L}×${P.CBL_W})으로 올려 옆으로 꽂는다. 받침벽 뒤 양끝 리브가 미는 힘을 받는다`);
   }
   if (u.mode === 1) info('배터리 → C6L 전원 경로 없음(격판에 구멍 없음)');
   for (const k of L.keys) for (const s of L.stand)
@@ -292,7 +300,7 @@ export function model(P) {
   const magnet = (c, zFace, up) => vcyl(c, up ? zFace - 1 : zFace - P.MAG_T - 0.2, up ? zFace + P.MAG_T + 0.2 : zFace + 1, P.MAG_D / 2 + 0.1);
 
   // Body: 벽(끼움형: 바닥~윗면, 적층형: ZS~IH) + 격판 + 기둥(위 = M3 인서트·뚜껑 받침, 아래 = 자석) + USB-C 자리
-  const u = L.usbc, st = u.stand, usbHoles = u.mode === 0 ? [u.flange] : u.mode === 2 ? [u.cable] : u.mode === 3 ? [u.cable, st.bracket] : [];
+  const u = L.usbc, st = u.stand, usbHoles = u.mode === 0 ? [u.flange] : u.mode === 2 ? [u.cable] : u.mode === 3 ? [u.cable, st.foot] : [];
   const smaRecess = ([sy, sz]) => cyl([-W - 1, sy, sz], [-P.SMA_WALL, sy, sz], P.ANT_D / 2);
   const body = sub(
     add(J ? sub(slab(-P.FLOOR - 1, top + 1), cav(-0.5, IH + 0.5), hole(-P.FLOOR - 2, 0), hole(IH, top + 2)) : sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
@@ -305,7 +313,7 @@ export function model(P) {
         cyl([x, y, zb], [x, y, zb + 2], RIB_R - P.RIB_PRESS, RIB_R), vcyl([x, y], zb + 2, ZD0 + 0.5, RIB_R),
         box(x - RIB_R, Math.min(y, wy), zb, x + RIB_R, Math.max(y, wy), ZD0 + 0.5)]) : []),
       ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : []),
-      ...(u.mode === 3 ? [rect(st.bracket, ZD1 - 0.1, st.zTop)] : [])),
+      ...(u.mode === 3 ? [st.bracket, ...st.ribs].map(r => rect(r, ZD1 - 0.1, st.zTop)) : [])),
     ...L.cols.map(c => vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2)),
     ...L.cols.map(c => magnet(c, ZS, true)),
     ...L.sma.flatMap(([sy, sz]) => [            // -X 벽: 위가 열린 SMA 홈(끼움형: 뚜껑 혀가 윗부분을 메움) + 바깥에서 안테나 지름만큼 파서 벽을 얇게
@@ -367,8 +375,7 @@ export function model(P) {
   };
   refs.REF_antLoRa = ant(L.sma[0], P.ANT_LORA_L);
   refs.REF_antWiFi = ant(L.sma[1], P.ANT_WIFI_L);
-  if (u.mode === 3) refs.REF_usbc = add(rect(st.flange, ZD1, ZD1 + USBC.FH), rect(st.body, st.zc - USBC.BODY_T / 2, st.zc + USBC.BODY_T / 2),
-    rect(st.plug, st.zc - USBC_PLUG_T / 2, st.zc + USBC_PLUG_T / 2));
+  if (u.mode === 3) refs.REF_usbc = add(rect(st.flange, ZD1, ZD1 + USBC.FH), rect(st.body, st.zc - USBC.BODY_T / 2, st.zc + USBC.BODY_T / 2));
   if (u.mode === 0) refs.REF_usbc = add(rect(u.flange, ZD0 - USBC.FT, ZD0), rect(u.body, ZD0, ZD0 - USBC.FT + USBC.BODY_L));
   return { L, warn, bodies: { Lid: lid, Body: body, Cover: cover }, refs };
 }

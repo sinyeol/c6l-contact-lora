@@ -25,7 +25,7 @@ const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } ca
 
 // ---- 사이드바 ----
 // 위치 항목 → 가운데 정렬 축(안쪽 공간 기준). C6L 은 SMA 가 벽에 붙어 있어 Y 만
-const CENTER = { C6L_Y: 'y', PCB_CX: 'x', PCB_CY: 'y', USBC_CX: 'x', USBC_CY: 'y' };
+const CENTER = { C6L_Y: 'y', PCB_CX: 'x', PCB_CY: 'y', USBC_CX: 'x', USBC_CY: 'y', USBW_CX: 'x', USBW_CY: 'y' };
 function buildControls() {
   let h = '';
   for (const g of [...new Set(DEFS.map(d => d[0]))]) {
@@ -126,10 +126,11 @@ function topSvg(L) {
   for (const [x, y] of L.ribs) s += circ([x, y], 3, 'boss');
   for (const p of L.c6lPads) s += circ(p, P.C6L_PAD_D, 'boss');       // 격판 누름 받침(C6L 밑)
   if (u.mode === 0) s += `<g data-drag="usbc">${rect(u.flange, 'part usb')}${rect(u.slot, 'cut')}${u.holes.map(h => circ(h, 1.8, 'boss')).join('')}${lbl(u.c[0], u.flange[1] - 3.5, 'USB-C')}</g>`;
-  if (u.mode === 3) {   // 세움: 받침벽 + 플랜지 + 누운 플러그 자리 + 케이블 구멍(드래그 = 구멍)
+  if (u.mode === 3) {   // 세움: 케이블 구멍과 받침벽(+리브·플랜지)을 따로 드래그
     const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2, st = u.stand;
-    s += `<g data-drag="usbc">${rect(st.plug, 'zone')}${rect(st.bracket, 'boss')}${rect(st.flange, 'part usb')}${rect(r, 'part usb', `rx="${rr2}"`)}`
-      + lbl((st.bracket[0] + st.bracket[2]) / 2, st.bracket[3] + 1.5, 'USB-C(세움)') + lbl(u.c[0], r[1] - 3.5, '케이블 구멍') + '</g>';
+    s += `<g data-drag="usbc">${rect(r, 'part usb', `rx="${rr2}"`)}${lbl(u.c[0], r[1] - 3.5, '케이블 구멍')}</g>`
+      + `<g data-drag="usbw">${[st.bracket, ...st.ribs].map(b => rect(b, 'boss')).join('')}${rect(st.flange, 'part usb')}`
+      + lbl((st.foot[0] + st.foot[2]) / 2, st.foot[3] + 1.5, 'USB-C(세움)') + '</g>';
   }
   if (u.mode === 2) {
     const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2;
@@ -186,8 +187,7 @@ function secSvg(L) {
   if (u.mode === 0) s += rect(u.flange[0], ZD0 - USBC.FT, u.flange[2], ZD0, 'part usb') + rect(u.body[0], ZD0, u.body[2], ZD0 - USBC.FT + USBC.BODY_L, 'part usb');
   if (u.mode >= 2) s += rect(u.cable[0], ZD0, u.cable[2], ZD1, 'cut');
   if (u.mode === 3) { const st = u.stand;
-    s += rect(st.bracket[0], ZD1, st.bracket[2], st.zTop, 'boss') + rect(st.flange[0], ZD1, st.flange[2], ZD1 + USBC.FH, 'part usb')
-      + rect(st.plug[0], st.zc - 3.25, st.plug[2], st.zc + 3.25, 'zone'); }
+    s += rect(st.foot[0], ZD1, st.foot[2], st.zTop, 'boss') + rect(st.flange[0], ZD1, st.flange[2], ZD1 + USBC.FH, 'part usb'); }
   s += `<g class="dim"><line x1="${-W - 5}" y1="${fz(-P.FLOOR)}" x2="${-W - 5}" y2="${fz(top)}"/><text x="${-W - 7}" y="${fz(oz / 2 - P.FLOOR)}" style="font-size:3.6px" transform="rotate(-90 ${-W - 7} ${fz(oz / 2 - P.FLOOR)})">${n1(oz)} mm</text></g>`;
   return s + '</svg>';
 }
@@ -245,7 +245,7 @@ function rebuild() {
 }
 
 // ---- 평면도 드래그 (C6L 은 SMA 가 벽에 붙어 있어야 해서 Y 만) ----
-const DRAG = { c6l: [null, 'C6L_Y'], pcb: ['PCB_CX', 'PCB_CY'], usbc: ['USBC_CX', 'USBC_CY'] };
+const DRAG = { c6l: [null, 'C6L_Y'], pcb: ['PCB_CX', 'PCB_CY'], usbc: ['USBC_CX', 'USBC_CY'], usbw: ['USBW_CX', 'USBW_CY'] };
 let drag = null;
 const svgPt = e => { const svg = $('v-top').querySelector('svg'), pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse()); return [pt.x, -pt.y]; };
 $('v-top').addEventListener('pointerdown', e => {
