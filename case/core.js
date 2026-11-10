@@ -29,6 +29,8 @@ export const DEFS = [
   ['케이스', 'CLR', '부품 여유(한 면)', 0, 2, 0.1, 'mm', 0.5],
   ['케이스', 'JOINT', '뚜껑·바닥 결합', 0, 1, 1, '', 1, [[1, '끼움형 — 통 구멍에 판을 끼움(옆면 이음선 없음)'], [0, '적층형 — 높이로 나눠 쌓음(옆면에 이음선)']]],
   ['케이스', 'FIT', '뚜껑·바닥 끼움 틈(한 면, 끼움형)', 0, 1, 0.05, 'mm', 0.2],
+  ['케이스', 'PLATE_R', '끼움 판 귀퉁이 R (평면, 통 구멍도 같게, 끼움형)', 0.5, 20, 0.1, 'mm', 4.6],
+  ['케이스', 'EDGE_R', '끼움 판 둘레 테두리 R (바깥면, 끼움형)', 0, 3, 0.1, 'mm', 1],
   ['배터리·바닥', 'BAT_L', '배터리 길이', 40, 140, 0.5, 'mm', 99],
   ['배터리·바닥', 'BAT_W', '배터리 폭', 30, 100, 0.5, 'mm', 65],
   ['배터리·바닥', 'BAT_T', '배터리 두께', 3, 30, 0.5, 'mm', 12],
@@ -134,7 +136,11 @@ export function layout(P) {
   L.c6lUsb = [gx - C6L.USB, cy0 + C6L.W];
   L.plug = [L.c6lUsb[0] - 6, cy0 + C6L.W, L.c6lUsb[0] + 6, cy0 + C6L.W + P.PLUG_L];
   L.outer = [IX + 2 * W, IY + 2 * W, L.IH + P.LID_T + P.FLOOR];
-  L.rT = Math.min(P.TOP_R, P.R_OUT - 0.5); L.rB = Math.min(P.BOT_R, P.R_OUT - 0.5);   // 필렛(Fusion)·토러스(manifold) 모두 세로 R 보다 작아야 한다
+  L.rT = Math.min(P.TOP_R, P.R_OUT - 0.5); L.rB = Math.min(P.BOT_R, P.R_OUT - 0.5);
+  // 끼움 판: 통 구멍 귀퉁이 rP, 판 귀퉁이 rP − FIT, 둘레 테두리 R 은 판 귀퉁이 R·판 두께보다 0.5 작게(뚜껑 eL, 바닥 eC)
+  L.rP = Math.min(P.PLATE_R, Math.min(L.IX, L.IY) / 2 - 1);
+  const rpp = Math.max(L.rP - P.FIT, 0.3);
+  L.eL = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.LID_T - 0.5), 0); L.eC = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.FLOOR - 0.5), 0);   // 필렛(Fusion)·토러스(manifold) 모두 세로 R 보다 작아야 한다
   // 볼트 길이: 체결 두께 + 인서트 길이 − 0.5 이하의 표준 길이
   const std = n => [3, 4, 5, 6, 8, 10, 12, 16].filter(v => v <= n).pop() ?? 3;
   L.bolts = { lid: std(P.LID_T - P.LID_CB_H + P.INS3_L - 0.5), pcb: std(PCB.T + P.INS3S_L - 0.5), usbc: std(USBC.FT + P.INS2_L - 0.3) };
@@ -189,6 +195,11 @@ export function check(P, L) {
   if (P.PIN_LEN > C6L.T) warn('레고 핀이 C6L 두께(8mm)보다 김');
   info('ST003 모듈: 사진상 헤더 핀·POWER LED 가 위로 솟아 있어 뚜껑에 닿는다 — 핀을 빼고 선을 직접 납땜, LED 는 눕힐 것');
   info('ST003 모듈: 사진상 둥근 캡(약 Ø11.5)이 끼워져 있다 — 캡을 쓰면 버튼 구멍 Ø12.5, 스위치 높이는 PCB~캡 끝 실측값으로');
+  if (P.JOINT === 1) {
+    const g0 = P.R_OUT - P.WALL, tc = L.rP < g0 ? P.R_OUT - ((g0 - L.rP) * Math.SQRT2 + L.rP) : P.WALL;
+    if (tc < 1.2) warn(`끼움 판 귀퉁이 R 이 작아 통 구멍 귀퉁이 벽이 ${tc.toFixed(1)}mm — 1.2 이상 권장(귀퉁이 R 을 키울 것)`);
+    if (P.EDGE_R > Math.min(L.eL, L.eC)) info(`끼움 판 둘레 테두리 R 은 뚜껑 ${L.eL.toFixed(1)}·바닥 ${L.eC.toFixed(1)}mm 까지(판 두께·귀퉁이 R − 0.5)`);
+  }
   if (P.TOP_R > L.rT || P.BOT_R > L.rB) info(`테두리 R 은 세로 모서리 R − 0.5(${P.R_OUT - 0.5}mm)까지 — 그 값으로 맞춤. 더 둥글게 하려면 세로 R 을 키울 것`);
   // 둥근 테두리가 안쪽 공간 모서리에 가장 가까운 곳의 벽 두께
   const rim = (r, t) => r > W2 && r > t ? r - Math.hypot(r - W2, r - t) : Math.min(W2, t);
@@ -223,7 +234,7 @@ export function expandRslab({ p: [x0, y0, z0, x1, y1, z1], R, rt, rb }) {
       ...[x0 + r, x1 - r].map(x => cyl([x, y0 + R, zc], [x, y1 - R, zc], r)),
       ...[[x1 - R, y1 - R, 0], [x0 + R, y1 - R, 90], [x0 + R, y0 + R, 180], [x1 - R, y0 + R, 270]].map(([x, y, a0]) => ({ t: 'torus', c: [x, y, zc], R: R - r, r, a0 })));
   }
-  return add(...parts);
+  return and(add(...parts), box(x0, y0, z0, x1, y1, z1));   // 테두리 R 이 판 두께의 절반보다 크면 모서리 원기둥이 반대쪽 면 밖으로 나간다
 }
 const rect = (r, z0, z1) => box(r[0], r[1], z0, r[2], r[3], z1);
 // 양끝이 둥근 긴 구멍(짧은 변 지름)
@@ -242,7 +253,10 @@ export function model(P) {
   const env = { t: 'rslab', p: [-W, -W, -P.FLOOR, IX + W, IY + W, top], R: P.R_OUT, rt: L.rT, rb: L.rB };
   const slab = (z0, z1) => and(env, box(-W - 1, -W - 1, z0, IX + W + 1, IY + W + 1, z1));
   const cav = (z0, z1) => rbox(0, 0, z0, IX, IY, z1, ri);
-  const plug = (z0, z1) => rbox(P.FIT, P.FIT, z0, IX - P.FIT, IY - P.FIT, z1, Math.max(ri - P.FIT, 0.3));   // 끼우는 판 윤곽
+  const plug = (z0, z1) => rbox(P.FIT, P.FIT, z0, IX - P.FIT, IY - P.FIT, z1, Math.max(ri - P.FIT, 0.3));   // 안쪽 공간 − 틈(통 안 기둥 자르기용)
+  // 끼움 판(귀퉁이 rP − FIT, 바깥면 둘레 테두리 rt/rb)과 통 구멍(귀퉁이 rP)
+  const plate = (z0, z1, rt, rb) => ({ t: 'rslab', p: [P.FIT, P.FIT, z0, IX - P.FIT, IY - P.FIT, z1], R: Math.max(L.rP - P.FIT, 0.3), rt, rb });
+  const hole = (z0, z1) => rbox(0, 0, z0, IX, IY, z1, L.rP);
   // 모서리 기둥: 원기둥을 벽 쪽으로 밀어 겹쳐 벽과 한 덩어리로, 안쪽 공간으로 잘라낸다
   // clip: 통 기둥은 안쪽 공간보다 0.05 크게 잘라 벽과 살짝 겹친다(곡면이 딱 맞닿으면 부피 0 조각이 떨어져 나온다), 바닥 기둥은 끼우는 판 윤곽으로
   const column = ([x, y], z0, z1, clip = rbox(-0.05, -0.05, z0, IX + 0.05, IY + 0.05, z1, ri + 0.05)) => {
@@ -255,7 +269,7 @@ export function model(P) {
   const u = L.usbc, usbHoles = u.mode === 0 ? [u.flange] : u.mode === 2 ? [u.cable] : [];
   const smaRecess = ([sy, sz]) => cyl([-W - 1, sy, sz], [-P.SMA_WALL, sy, sz], P.ANT_D / 2);
   const body = sub(
-    add(J ? sub(slab(-P.FLOOR - 1, top + 1), cav(-P.FLOOR - 2, top + 2)) : sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
+    add(J ? sub(slab(-P.FLOOR - 1, top + 1), cav(-0.5, IH + 0.5), hole(-P.FLOOR - 2, 0), hole(IH, top + 2)) : sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
       cav(ZD0, ZD1),
       ...L.c6lPads.filter(p => !usbHoles.some(r => overlap(sq(p, P.C6L_PAD_D), r))).map(p => vcyl(p, ZD1 - 0.1, IH - C6L.T + P.C6L_PRESS, P.C6L_PAD_D / 2)),
       ...L.cols.map(c => column(c, ZS, IH)),
@@ -276,10 +290,13 @@ export function model(P) {
 
   let cover;
   if (J) {
-    // 손가락 홈: 통 앞벽 아래 끝을 벽 두께 전부 반달로 파서 바닥판 앞모서리와 그 위 1.5mm 가 드러난다 → 손톱을 걸어 바닥을 당긴다
-    body.c.push(cyl([IX / 2, -W - 1, 1.5 - P.NOTCH_R], [IX / 2, 0, 1.5 - P.NOTCH_R], P.NOTCH_R));
-    // Cover: 통 아랫구멍에 끼우는 판 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
-    cover = sub(add(and(env, plug(-P.FLOOR - 1, 0)), ...(ZS > 0.5 ? L.cols.map(c => column(c, -0.5, ZS, plug(-0.5, ZS))) : [])),
+    // 손가락 홈(앞벽 아래 끝 반달): 바닥판 높이(z<0)는 벽을 다 파고 바닥판 혀가 바깥면까지 메우고,
+    // 그 위 1.5mm 는 벽 바깥만 파서(안쪽 0.8 남김) 안이 보이지 않는다 → 손톱을 혀 윗면에 걸어 바닥을 당긴다
+    const nz = 1.5 - P.NOTCH_R, ncyl = (y1, r) => cyl([IX / 2, -W - 1, nz], [IX / 2, y1, nz], r);
+    body.c.push(ncyl(-0.8, P.NOTCH_R), and(ncyl(0.1, P.NOTCH_R), box(-W - 1, -W - 1, -P.FLOOR - 2, IX + W + 1, 1, 0)));
+    const ntab = and(env, ncyl(P.FIT + 0.5, P.NOTCH_R - P.FIT), box(-W - 1, -W - 1, -P.FLOOR - 1, IX + W + 1, 1, 0));
+    // Cover: 통 아랫구멍에 끼우는 판 + 손가락 홈 혀 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
+    cover = sub(add(and(env, plate(-P.FLOOR, 0, 0, L.eC)), ntab, ...(ZS > 0.5 ? L.cols.map(c => column(c, -0.5, ZS, plug(-0.5, ZS))) : [])),
       ...L.cols.map(c => magnet(c, ZS, false)));
   } else {
     // 손가락 홈(바깥에서만, 안쪽 0.8 남김)은 이음선의 높은 쪽 부품에 — 바닥이 낮으면 통에 파서 바닥 벽 윗모서리를 손끝으로 당긴다
@@ -295,7 +312,7 @@ export function model(P) {
   const g = L.PCB_GAP, pin = P.PIN_D / 2;
   // 끼움형: 통 윗구멍에 끼우는 판(통 기둥 윗면에 얹혀 볼트로 고정) + SMA 홈 윗부분을 메우는 혀. 적층형: 통 위 외피 전체
   const tabs = L.sma.map(([sy]) => box(-W - 1, sy - P.SMA_HOLE_D / 2 + P.FIT, IH, P.FIT + 0.5, sy + P.SMA_HOLE_D / 2 - P.FIT, top + 1));
-  const lid = sub(add(J ? and(env, add(plug(IH, top + 1), ...tabs)) : slab(IH, top + 1),
+  const lid = sub(add(J ? and(env, add(plate(IH, top, L.eL, 0), ...tabs)) : slab(IH, top + 1),
       ...L.pins.flatMap(([x, y]) => [cyl([x, y, IH - P.PIN_LEN + 0.6], [x, y, IH], pin), cyl([x, y, IH - P.PIN_LEN], [x, y, IH - P.PIN_LEN + 0.6], pin - 0.5, pin)]),
       and(add(...L.stand.map(s => vcyl(s, IH - g, IH + 0.5, P.STANDOFF_D / 2))), plug(IH - g - 1, IH + 0.5))),   // 벽 쪽은 끼우는 판 윤곽으로 잘라 통에 닿지 않게
     ...L.stand.map(s => vcyl(s, IH - g - 1, IH - g + P.INS3S_L + 0.5, P.INS3_HOLE / 2)),
