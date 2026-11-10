@@ -42,7 +42,7 @@ export const DEFS = [
   ['배터리·바닥', 'COL_D', '모서리 기둥 지름', 7, 14, 0.5, 'mm', 9.5],
   ['배터리·바닥', 'MAG_D', '자석 지름', 3, 10, 0.5, 'mm', 6],
   ['배터리·바닥', 'MAG_T', '자석 두께', 1, 5, 0.5, 'mm', 3],
-  ['배터리·바닥', 'NOTCH_R', '손가락 홈 반지름', 3, 12, 0.5, 'mm', 7],
+  ['배터리·바닥', 'NOTCH_R', '손가락 구멍·홈 반지름 (끼움형: 바닥판 구멍, 적층형: 이음선 홈)', 3, 12, 0.5, 'mm', 7],
   ['C6L', 'C6L_Y', '위치 Y (중심, 드래그)', 0, 120, 0.5, 'mm', 44.5],
   ['C6L', 'OLED_WX', 'OLED 창 X(길이 방향)', 8, 16, 0.5, 'mm', 11],
   ['C6L', 'OLED_WY', 'OLED 창 Y', 10, 20, 0.5, 'mm', 15],
@@ -140,6 +140,7 @@ export function layout(P) {
   // 끼움 판: 통 구멍 귀퉁이 rP, 판 귀퉁이 rP − FIT, 둘레 테두리 R 은 판 귀퉁이 R·판 두께보다 0.5 작게(뚜껑 eL, 바닥 eC)
   L.rP = Math.min(P.PLATE_R, Math.min(L.IX, L.IY) / 2 - 1);
   const rpp = Math.max(L.rP - P.FIT, 0.3);
+  L.pull = [L.IX / 2, P.FIT + P.NOTCH_R + 3];   // 끼움형 바닥판 손가락 구멍(앞쪽 가장자리 가까이 — 손끝을 넣어 당긴다)
   L.eL = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.LID_T - 0.5), 0); L.eC = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.FLOOR - 0.5), 0);   // 필렛(Fusion)·토러스(manifold) 모두 세로 R 보다 작아야 한다
   // 볼트 길이: 체결 두께 + 인서트 길이 − 0.5 이하의 표준 길이
   const std = n => [3, 4, 5, 6, 8, 10, 12, 16].filter(v => v <= n).pop() ?? 3;
@@ -290,14 +291,11 @@ export function model(P) {
 
   let cover;
   if (J) {
-    // 손가락 홈(앞벽 아래 끝 반달): 바닥판 높이(z<0)는 벽을 다 파고 바닥판 혀가 바깥면까지 메우고,
-    // 그 위 1.5mm 는 벽 바깥만 파서(안쪽 0.8 남김) 안이 보이지 않는다 → 손톱을 혀 윗면에 걸어 바닥을 당긴다
-    const nz = 1.5 - P.NOTCH_R, ncyl = (y1, r) => cyl([IX / 2, -W - 1, nz], [IX / 2, y1, nz], r);
-    body.c.push(ncyl(-0.8, P.NOTCH_R), and(ncyl(0.1, P.NOTCH_R), box(-W - 1, -W - 1, -P.FLOOR - 2, IX + W + 1, 1, 0)));
-    const ntab = and(env, ncyl(P.FIT + 0.5, P.NOTCH_R - P.FIT), box(-W - 1, -W - 1, -P.FLOOR - 1, IX + W + 1, 1, 0));
-    // Cover: 통 아랫구멍에 끼우는 판 + 손가락 홈 혀 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
-    cover = sub(add(and(env, plate(-P.FLOOR, 0, 0, L.eC)), ntab, ...(ZS > 0.5 ? L.cols.map(c => column(c, -0.5, ZS, plug(-0.5, ZS))) : [])),
-      ...L.cols.map(c => magnet(c, ZS, false)));
+    // 손가락 구멍: 바닥판 앞쪽을 뚫고 바깥 모서리를 0.8 깎는다 → 손끝을 넣어 바닥을 당긴다(옆으로 튀어나온 혀는 부러져서 없앰)
+    const [px, py] = L.pull, pull = [vcyl(L.pull, -P.FLOOR - 1, 1, P.NOTCH_R), cyl([px, py, -P.FLOOR - 1], [px, py, -P.FLOOR + 0.8], P.NOTCH_R + 1.8, P.NOTCH_R)];
+    // Cover: 통 아랫구멍에 끼우는 판 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
+    cover = sub(add(and(env, plate(-P.FLOOR, 0, 0, L.eC)), ...(ZS > 0.5 ? L.cols.map(c => column(c, -0.5, ZS, plug(-0.5, ZS))) : [])),
+      ...L.cols.map(c => magnet(c, ZS, false)), ...pull);
   } else {
     // 손가락 홈(바깥에서만, 안쪽 0.8 남김)은 이음선의 높은 쪽 부품에 — 바닥이 낮으면 통에 파서 바닥 벽 윗모서리를 손끝으로 당긴다
     const notch = cyl([IX / 2, -W - 1, ZS], [IX / 2, -0.8, ZS], P.NOTCH_R), notchInBody = ZS + P.FLOOR < ZD0 - ZS;

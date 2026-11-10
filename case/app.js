@@ -143,7 +143,8 @@ function topSvg(L) {
   for (const b of L.cols) s += circ(b, P.LID_CB_D, 'cut');
   for (const p of L.pins) s += circ(p, P.PIN_D, 'cut');
   for (const [sy] of L.sma) s += rect([-W, sy - P.ANT_D / 2, -P.SMA_WALL, sy + P.ANT_D / 2], 'cut');
-  s += rect([L.IX / 2 - P.NOTCH_R, -W - 0.3, L.IX / 2 + P.NOTCH_R, -0.8], 'cut') + lbl(L.IX / 2, -W - 4, '손가락 홈(바닥)');
+  s += P.JOINT === 1 ? circ(L.pull, P.NOTCH_R * 2, 'cut') + lbl(L.pull[0], L.pull[1] + P.NOTCH_R + 3, '손가락 구멍(바닥)')
+    : rect([L.IX / 2 - P.NOTCH_R, -W - 0.3, L.IX / 2 + P.NOTCH_R, -0.8], 'cut') + lbl(L.IX / 2, -W - 4, '손가락 홈(바닥)');
   s += lbl(mx, my + wy + o + 1.5, 'OLED') + lbl(-W - 5, L.sma[1][0] + 6, '안테나');
   s += dimH(-W, L.IX + W, -10, fy, `${n1(ox)}`) + '</svg>';
   return s;
