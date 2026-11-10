@@ -27,8 +27,8 @@ const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } ca
 // 위치 항목 → 가운데 정렬 축(안쪽 공간 기준). C6L 은 SMA 가 벽에 붙어 있어 Y 만
 const CENTER = { C6L_Y: 'y', PCB_CX: 'x', PCB_CY: 'y', USBC_CX: 'x', USBC_CY: 'y', USBW_CX: 'x', USBW_CY: 'y', PULL_X: 'x', PULL_Y: 'y' };
 // 지금 고른 방식에서 쓰이지 않는 항목(없으면 늘 씀) — 사이드바에서 숨긴다
-const usb = (...m) => P => m.includes(P.USB_MODE), fitted = P => P.JOINT === 1, mag = P => P.COVER_FIX !== 1;
-const USE = { MAG_D: mag, MAG_T: mag, FIT: fitted, PLATE_R: fitted, EDGE_R: fitted, PULL_X: fitted, PULL_Y: fitted, PULL_DIR: fitted,
+const usb = (...m) => P => m.includes(P.USB_MODE), fitted = P => P.JOINT === 1, mag = P => P.COVER_FIX !== 1, cap = P => P.BTN_CAP === 1;
+const USE = { BTN_PROUD: P => !cap(P), CAP_PROUD: cap, CAP_TOP_T: cap, CAP_FL_T: cap, CAP_FL_W: cap, CAP_CLR: cap, STEM_D: cap, MAG_D: mag, MAG_T: mag, FIT: fitted, PLATE_R: fitted, EDGE_R: fitted, PULL_X: fitted, PULL_Y: fitted, PULL_DIR: fitted,
   USBC_CX: usb(0, 2, 3), USBC_CY: usb(0, 2, 3), USBC_ROT: usb(0, 2, 3), USBW_CX: usb(3), USBW_CY: usb(3), USBW_T: usb(3),
   USBC_SLOT_W: usb(0, 3), USBC_SLOT_T: usb(0, 3), CBL_L: usb(2, 3), CBL_W: usb(2, 3), PLUG_L: usb(2), INS2_HOLE: usb(0, 3), INS2_L: usb(0, 3) };
 const UI_KEY = 'c6lcase.ui.closed', SAVED_KEY = 'c6lcase.saved';
@@ -93,7 +93,7 @@ const syncControls = (keys = Object.keys(P)) => { for (const k of keys) for (con
 // 분해 방향: 참고 부품은 자기를 잡는 부품과 함께 — C6L·PCB·안테나(C6L 에 조임)는 뚜껑, USB-C 는 세움이면 뚜껑·밑에서 꽂음이면 통,
 // 배터리는 누름 리브가 있으면 통(리브가 잡는다), 없으면 바닥
 const liftDir = P => { const L = layout(P), ribs = L.ribs.length && L.ZD0 - (P.JOINT === 1 ? 0 : L.ZS) > 3;
-  return { Lid: 1, REF_C6L: 1, REF_buttonPCB: 1, REF_antLoRa: 1, REF_antWiFi: 1, Cover: -1, REF_usbc: P.USB_MODE === 3 ? 1 : 0, REF_battery: ribs ? 0 : -1 }; };
+  return { Lid: 1, Keys: 1, REF_C6L: 1, REF_buttonPCB: 1, REF_antLoRa: 1, REF_antWiFi: 1, Cover: -1, REF_usbc: P.USB_MODE === 3 ? 1 : 0, REF_battery: ribs ? 0 : -1 }; };
 function createView(el) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -113,6 +113,7 @@ function createView(el) {
     Lid: new THREE.MeshStandardMaterial({ color: css('--lid'), roughness: .6 }),
     Body: new THREE.MeshStandardMaterial({ color: css('--base'), roughness: .6 }),
     Cover: new THREE.MeshStandardMaterial({ color: css('--lidb'), roughness: .6 }),
+    Keys: new THREE.MeshStandardMaterial({ color: css('--sel'), roughness: .5 }),
     REF_battery: ghost(0x8a8378), REF_C6L: ghost(0x3d4652), REF_buttonPCB: ghost(0x2e7d4f), REF_usbc: ghost(0x9a9a9a), REF_antLoRa: ghost(0x2f7fd0), REF_antWiFi: ghost(0xc0392b),
   };
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x333333, transparent: true, opacity: .45 });
@@ -225,7 +226,8 @@ function secSvg(L) {
   for (const [x] of L.c6lPads) s += rect(x - P.C6L_PAD_D / 2, ZD1, x + P.C6L_PAD_D / 2, IH - C6L.T + P.C6L_PRESS, 'boss');
   s += rect(c[0], IH - C6L.T, c[2], IH, 'part c6l') + rect(c[0] - C6L.SMA_LEN, L.sma[0][1] - 3.2, c[0], L.sma[0][1] + 3.2, 'part c6l');
   s += rect(p[0], pz, p[2], pz + PCB.T, 'part pcb');
-  for (const [x] of L.keysAll) s += rect(x - 6, pz + PCB.T, x + 6, pz + PCB.T + 3.5, 'part sw') + rect(x - 1.75, pz + PCB.T, x + 1.75, pz + PCB.T + P.SW_H, 'part sw');
+  for (const [x] of L.keysAll) s += rect(x - 6, pz + PCB.T, x + 6, pz + PCB.T + 3.5, 'part sw') + rect(x - P.STEM_D / 2, pz + PCB.T, x + P.STEM_D / 2, pz + PCB.T + P.SW_H, 'part sw');
+  if (L.cap) for (const [x] of L.keys) s += rect(x - L.cap.rf, IH, x + L.cap.rf, IH + P.CAP_FL_T, 'cap') + rect(x - L.cap.r, IH, x + L.cap.r, top + P.CAP_PROUD, 'cap');
   for (const [x] of L.stand) s += rect(x - P.STANDOFF_D / 2, IH - L.PCB_GAP, x + P.STANDOFF_D / 2, IH, 'boss');
   if (u.mode === 0) s += rect(u.flange[0], ZD0 - USBC.FT, u.flange[2], ZD0, 'part usb') + rect(u.body[0], ZD0, u.body[2], ZD0 - USBC.FT + USBC.BODY_L, 'part usb');
   if (u.mode >= 2) s += rect(u.cable[0], ZD0, u.cable[2], ZD1, 'cut');
@@ -244,6 +246,7 @@ function tables(m, meshes) {
     + row('배터리 칸 높이', n1(L.ZD0) + ' mm')
     + row('뚜껑 밑 ~ PCB 윗면', n1(L.PCB_GAP) + ' mm')
     + row('출력 부피 뚜껑 / 통 / 바닥', `${vol('Lid')} / ${vol('Body')} / ${vol('Cover')} cm³`)
+    + (L.cap ? row('버튼 캡', `${L.keys.length}개 · 머리 Ø${n1(2 * L.cap.r)} · 턱 Ø${n1(2 * L.cap.rf)}`) : '')
     + '</table>';
   const ins = (d, l, hole) => `M${d} 열삽입 인서트 L${n1(l)} <small>(구멍 Ø${n1(hole)})</small>`;
   $('t-parts').innerHTML = '<table><tr><th>자리</th><th>부품</th><th class="n">수량</th></tr>'
@@ -264,6 +267,7 @@ let timer = 0, ready = false;
 function draw2d() {
   const m = model(P);
   $('v-top').innerHTML = topSvg(m.L);
+  $('btn-stl-Keys').hidden = !m.L.cap;
   $('v-sec').innerHTML = secSvg(m.L);
   tables(m, cur?.meshes);
   return m;
@@ -324,9 +328,9 @@ $('btn-json').onclick = () => {
   try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch {}
   refreshSide();
 };
-for (const n of ['Lid', 'Body', 'Cover'])     // 뚜껑은 X축 180°(윗면이 바닥), 통은 격판이 바닥에 오도록 그대로
-  $('btn-stl-' + n).onclick = () => cur?.meshes && download(`c6l_case_${n.toLowerCase()}.stl`, stl(cur.meshes[n], n === 'Lid' ? (x, y, z) => [x, -y, -z] : undefined), 'model/stl');
-for (const id of ['ly-lid', 'ly-body', 'ly-cover', 'ly-ref', 'lift']) $(id).addEventListener('input', show3d);
+for (const n of ['Lid', 'Body', 'Cover', 'Keys'])     // 뚜껑은 X축 180°(윗면이 바닥), 통은 격판이 바닥에 오도록 그대로
+  $('btn-stl-' + n).onclick = () => cur?.meshes?.[n] && download(`c6l_case_${n.toLowerCase()}.stl`, stl(cur.meshes[n], n === 'Lid' ? (x, y, z) => [x, -y, -z] : undefined), 'model/stl');
+for (const id of ['ly-lid', 'ly-body', 'ly-cover', 'ly-keys', 'ly-ref', 'lift']) $(id).addEventListener('input', show3d);
 
 buildControls(); syncControls();
 $('status').textContent = '형상 엔진 불러오는 중…';

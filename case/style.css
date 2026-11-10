@@ -60,6 +60,7 @@ tr.w-info td { background: #eef5f9; color: var(--info); font-style: italic; }
 .part.bat { fill: none; stroke-dasharray: 5 3; stroke: #8a8378; } .part.c6l { fill: #5b6b7d; } .part.pcb { fill: #3f8f5a; } .part.sw { fill: #222; fill-opacity: .6; }
 .wall { fill: var(--base); fill-opacity: .35; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; fill-rule: evenodd; }
 .lidp { fill: var(--lid); fill-opacity: .45; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.cap { fill: var(--sel); fill-opacity: .55; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .boss { fill: var(--base); fill-opacity: .8; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .zone { fill: none; stroke: #8a8378; stroke-dasharray: 2 3; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .lbl { font-size: 3.2px; fill: var(--ink); text-anchor: middle; pointer-events: none; }

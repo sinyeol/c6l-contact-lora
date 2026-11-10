@@ -2,7 +2,7 @@
 // 브라우저는 manifold 로, Fusion 스크립트(C6LCaseBuild.py)는 TemporaryBRepManager 로 같은 트리를 계산한다.
 // 좌표(mm): X=길이(+X 오른쪽), Y=깊이(+Y 뒤), Z=위. 바닥판 윗면(배터리가 놓이는 면)의 앞-왼쪽 안쪽 모서리가 원점.
 // 부품 3개: Lid(뚜껑, C6L·버튼 PCB 를 밑에 매단다) / Body(벽 + 가운데 격판, 위 칸 = 전자부, 아래 칸 = 배터리)
-//          / Cover(자석 바닥 — 떼어 배터리를 넣고 뺀다). 뚜껑-통은 모서리 기둥의 M3 열삽입 인서트로 볼트 체결.
+//          / Cover(자석 바닥 — 떼어 배터리를 넣고 뺀다) / Keys(버튼 캡, BTN_CAP 일 때). 뚜껑-통은 모서리 기둥의 M3 열삽입 인서트로 볼트 체결.
 // 트리 노드: {t:'box',p:[x0,y0,z0,x1,y1,z1]} | {t:'cyl',a,b,r1,r2} | {t:'frustum',c:[x,y],z0,z1,w0:[wx,wy],off} | {t:'torus',c:[x,y,z],R,r,a0} (Z축, a0° 부터 90°) | {t:'rslab',p,R,rt,rb} (둥근 외피)
 //          | {t:'add'|'sub'|'and',c:[…]} (sub = c[0] − 나머지). frustum = z0 에서 w0, z1 에서 사방 off 만큼 넓어지는 사각뿔대
 
@@ -73,6 +73,13 @@ export const DEFS = [
   ['버튼 PCB', 'SW_H', '택트 스위치 높이(PCB~스템 끝)', 4, 15, 0.1, 'mm', 7.3],
   ['버튼 PCB', 'BTN_HOLE_D', '뚜껑 버튼 구멍', 3, 14, 0.5, 'mm', 8],
   ['버튼 PCB', 'BTN_PROUD', '스템이 뚜껑 위로 나옴', -2, 4, 0.1, 'mm', 0.5],
+  ['버튼 PCB', 'BTN_CAP', '버튼', 0, 1, 1, '', 1, [[1, '출력 버튼 캡 — 스템에 끼우고 뚜껑 밑 홈의 턱에 걸림'], [0, '없음 — 스위치 스템이 구멍으로 나옴']]],
+  ['버튼 PCB', 'CAP_PROUD', '캡이 뚜껑 위로 나옴', 0, 4, 0.1, 'mm', 1],
+  ['버튼 PCB', 'CAP_TOP_T', '캡 윗면 두께(스템 끝 ~ 캡 윗면)', 0.6, 3, 0.1, 'mm', 1],
+  ['버튼 PCB', 'CAP_FL_T', '캡 턱 두께 (= 뚜껑 밑 홈 깊이)', 0.6, 2, 0.1, 'mm', 1],
+  ['버튼 PCB', 'CAP_FL_W', '캡 턱 폭 (구멍 밖으로)', 0.8, 4, 0.1, 'mm', 1.5],
+  ['버튼 PCB', 'CAP_CLR', '캡 둘레 틈', 0.1, 0.6, 0.05, 'mm', 0.25],
+  ['버튼 PCB', 'STEM_D', '스위치 스템 지름 (캡 구멍 +0.3)', 2, 5, 0.1, 'mm', 3.5],
   ['버튼 PCB', 'UNDER_PCB', 'PCB 밑 리드 여유', 0, 6, 0.5, 'mm', 2.5],
   ['버튼 PCB', 'STANDOFF_D', 'PCB 기둥 지름(인서트)', 6, 10, 0.5, 'mm', 8],
   ['USB-C 전원', 'USB_MODE', '배터리 → C6L 전원 경로', 0, 3, 1, '', 3, [[3, '격판 위에 세운 USB-C(90°) — 배터리 케이블이 구멍으로 올라와 꽂음'], [0, '격판에 패널형 USB-C 커넥터(밑에서 꽂음)'], [2, '격판 구멍 — 배터리 케이블을 C6L 에 바로'], [1, '없음']]],
@@ -104,7 +111,9 @@ export function layout(P) {
   L.bat = [P.COL_D + P.CLR, P.CLR, P.COL_D + P.CLR + P.BAT_L, P.CLR + P.BAT_W];
   L.ZD0 = P.BAT_T + P.BAT_GAP;                          // 격판 밑면
   L.ZD1 = L.ZD0 + P.DIV_T;                              // 격판 윗면 = 전자부 바닥
-  L.PCB_GAP = P.SW_H - P.LID_T - P.BTN_PROUD;          // 뚜껑 밑면 ~ PCB 윗면
+  L.PCB_GAP = P.SW_H - P.LID_T - (P.BTN_CAP ? P.CAP_PROUD - P.CAP_TOP_T : P.BTN_PROUD);   // 뚜껑 밑면 ~ PCB 윗면 (캡: 스템 끝 = 캡 윗면 − CAP_TOP_T)
+  // 버튼 캡: 머리(구멍 − 틈) + 턱(뚜껑 밑 홈 안, 밑면 = 뚜껑 밑면) + 밑에서 스템 구멍
+  L.cap = P.BTN_CAP ? { r: P.BTN_HOLE_D / 2 - P.CAP_CLR, rf: P.BTN_HOLE_D / 2 + P.CAP_FL_W, rr: P.BTN_HOLE_D / 2 + P.CAP_FL_W + P.CAP_CLR, rs: P.STEM_D / 2 + 0.15 } : null;
   L.IH = L.ZD1 + Math.max(C6L.T, L.PCB_GAP + PCB.T + P.UNDER_PCB) + 0.5;
   L.ZS = Math.min(Math.max(P.SEAM_H, 0), L.ZD0);        // 바닥-통 이음 높이
   const cr = P.COL_D / 2;
@@ -227,8 +236,16 @@ export function check(P, L) {
     else if (cols.some(c => overlap(c, b))) err('바닥 손가락 구멍이 모서리 자석 기둥과 겹침');
   }
   if (u.mode === 1) info('배터리 → C6L 전원 경로 없음(격판에 구멍 없음)');
+  const kr = L.cap ? L.cap.rr : P.BTN_HOLE_D / 2;
   for (const k of L.keys) for (const s of L.stand)
-    if (Math.hypot(k[0] - s[0], k[1] - s[1]) <= (P.BTN_HOLE_D + P.STANDOFF_D) / 2) { err('버튼 구멍이 PCB 기둥과 겹침'); break; }
+    if (Math.hypot(k[0] - s[0], k[1] - s[1]) <= kr + P.STANDOFF_D / 2) { err(L.cap ? '버튼 캡 턱 홈이 PCB 기둥과 겹침' : '버튼 구멍이 PCB 기둥과 겹침'); break; }
+  if (L.cap) {
+    const ks = L.keys;
+    if (ks.some((k, i) => i && Math.hypot(k[0] - ks[i - 1][0], k[1] - ks[i - 1][1]) < 2 * L.cap.rr + 0.8)) err('버튼 캡 턱끼리 닿음 — 구멍이나 턱 폭을 줄일 것');
+    if (L.cap.r - L.cap.rs < 0.8) err(`버튼 캡 벽이 얇음(${(L.cap.r - L.cap.rs).toFixed(1)}mm) — 구멍을 키우거나 스템 지름 확인`);
+    if (P.LID_T - P.CAP_FL_T < 1) err('뚜껑 밑 캡 홈이 너무 깊음 — 구멍 둘레 뚜껑이 1mm 보다 얇다');
+    if (L.PCB_GAP >= 3.5 && L.PCB_GAP - 3.5 < 0.4) warn(`캡 턱 밑 ~ 스위치 몸통 ${(L.PCB_GAP - 3.5).toFixed(1)}mm — 누를 거리가 모자랄 수 있음(캡 돌출을 줄이거나 윗면을 두껍게)`);
+  }
   const mx = P.OLED_WX / 2 + L.maskOff;
   if (Math.abs(L.oled[0] - L.ubtn[0]) < mx + P.UBTN_D / 2 + 0.8) warn('OLED 마스크 경사가 C6L 버튼 구멍에 닿음');
   if (2 * C6L.SMA_DX <= P.ANT_D) err('안테나 자리 두 개가 서로 겹침');
@@ -386,6 +403,7 @@ export function model(P) {
       off: (top + 0.5 - IH - P.MASK_T) / Math.tan(P.MASK_SLOPE * Math.PI / 180) }] : []),
     vcyl(L.ubtn, IH - 1, top + 1, P.UBTN_D / 2),
     ...L.keys.map(k => vcyl(k, IH - 1, top + 1, P.BTN_HOLE_D / 2)),
+    ...(L.cap ? L.keys.map(k => vcyl(k, IH - 1, IH + P.CAP_FL_T, L.cap.rr)) : []),
     ...L.cols.flatMap(c => B ? [vcyl(c, colTop - 1, top - 1, P.INS3_HOLE / 2)] : [vcyl(c, IH - 1, top + 1, M3_CLEAR / 2), vcyl(c, top - P.LID_CB_H, top + 1, P.LID_CB_D / 2)]),
     ...(P.SMA_WALL < W ? L.sma.map(smaRecess) : []),
     ...(u.mode === 3 ? [rect(st.slot, st.zc - P.USBC_SLOT_T / 2, st.zc + P.USBC_SLOT_T / 2), ...st.ins.map(([a, b]) => cyl(a, b, P.INS2_HOLE / 2))] : []));
@@ -397,7 +415,7 @@ export function model(P) {
     REF_C6L: add(box(c[0], c[1], IH - C6L.T, c[2], c[3], IH), ...L.sma.map(([sy, sz]) => cyl([c[0], sy, sz], [c[0] - C6L.SMA_LEN, sy, sz], 3.2))),
     REF_buttonPCB: add(rect(p, pz, pz + PCB.T),
       ...L.keysAll.map(([x, y]) => box(x - 6, y - 6, pz + PCB.T, x + 6, y + 6, pz + PCB.T + 3.5)),
-      ...L.keysAll.map(k => vcyl(k, pz + PCB.T, pz + PCB.T + P.SW_H, 1.75))),
+      ...L.keysAll.map(k => vcyl(k, pz + PCB.T, pz + PCB.T + P.SW_H, P.STEM_D / 2))),
   };
   // 부속 RP-SMA 휩 안테나(docs: Wi-Fi 84·LoRa 108mm, 사진상 OLED 를 위로 두면 LoRa 가 −Y 쪽): 벽 파기 바닥에서 마디, 거기서 ANT_FOLD 만큼 위로 꺾임
   const fa = P.ANT_FOLD * Math.PI / 180, dir = [-Math.cos(fa), 0, Math.sin(fa)];
@@ -409,7 +427,10 @@ export function model(P) {
   refs.REF_antWiFi = ant(L.sma[1], P.ANT_WIFI_L);
   if (u.mode === 3) refs.REF_usbc = add(rect(st.flange, st.zc - USBC.FH / 2, st.zc + USBC.FH / 2), rect(st.body, st.zc - USBC.BODY_T / 2, st.zc + USBC.BODY_T / 2));
   if (u.mode === 0) refs.REF_usbc = add(rect(u.flange, ZD0 - USBC.FT, ZD0), rect(u.body, ZD0, ZD0 - USBC.FT + USBC.BODY_L));
-  return { L, warn, bodies: { Lid: lid, Body: body, Cover: cover }, refs };
+  const bodies = { Lid: lid, Body: body, Cover: cover };
+  if (L.cap) { const { r, rf, rs } = L.cap;
+    bodies.Keys = add(...L.keys.map(k => sub(add(vcyl(k, IH, IH + P.CAP_FL_T, rf), vcyl(k, IH, top + P.CAP_PROUD, r)), vcyl(k, IH - 1, top + P.CAP_PROUD - P.CAP_TOP_T, rs)))); }
+  return { L, warn, bodies, refs };
 }
 
 // case.json: 파라미터 + 트리. Fusion 스크립트가 이것만 읽는다

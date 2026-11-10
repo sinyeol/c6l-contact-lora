@@ -20,6 +20,7 @@
       <button id="btn-stl-Lid" type="button">STL · 뚜껑</button>
       <button id="btn-stl-Body" type="button">STL · 통</button>
       <button id="btn-stl-Cover" type="button">STL · 자석 바닥</button>
+      <button id="btn-stl-Keys" type="button">STL · 버튼 캡</button>
     </div>
     <p class="note">STL 은 출력 자세(뚜껑은 뒤집힘, 바닥 z=0)로 저장됩니다. Fusion 은 <code>C6LCaseBuild</code> 스크립트 폴더나 다운로드 폴더의 <code>c6l-case.json</code> 을 읽습니다.</p>
   </aside>
@@ -28,6 +29,7 @@
       <label><input type="checkbox" id="ly-lid" checked> 뚜껑</label>
       <label><input type="checkbox" id="ly-body" checked> 통</label>
       <label><input type="checkbox" id="ly-cover" checked> 자석 바닥</label>
+      <label><input type="checkbox" id="ly-keys" checked> 버튼 캡</label>
       <label><input type="checkbox" id="ly-ref" checked> 부품(배터리·C6L·PCB·USB-C)</label>
       <label>분해 <input type="range" id="lift" min="0" max="60" step="1" value="0" aria-label="뚜껑 띄우기"> <span id="lift-n">0</span> mm</label>
       <span id="status" style="color:var(--mute)"></span>
