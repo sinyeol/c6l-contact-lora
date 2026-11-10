@@ -154,7 +154,7 @@ function topSvg(L) {
   const rect = (r, cls, extra = '') => `<rect class="${cls}" x="${r[0]}" y="${fy(r[3])}" width="${r[2] - r[0]}" height="${r[3] - r[1]}" ${extra}/>`;
   const circ = (c, d, cls) => `<circle class="${cls}" cx="${c[0]}" cy="${fy(c[1])}" r="${d / 2}"/>`;
   const lbl = (x, y, t) => `<text class="lbl" x="${x}" y="${fy(y) + 1}">${esc(t)}</text>`;
-  const ri = Math.max(P.R_OUT - W, 0.3), c = L.c6l, u = L.usbc;
+  const ri = L.ri, c = L.c6l, u = L.usbc;
   let s = `<svg viewBox="${-W - pad} ${-pad} ${ox + 2 * pad} ${oy + 2 * pad + 8}" role="img" aria-label="평면도">`;
   s += `<path class="wall" d="${rr(-W, -W, L.IX + W, L.IY + W, P.R_OUT, fy)} ${rr(0, 0, L.IX, L.IY, ri, fy)}"/>`;
   s += rect(L.bat, 'part bat') + lbl((L.bat[0] + L.bat[2]) / 2, L.bat[1] + 3, '배터리(격판 밑)');

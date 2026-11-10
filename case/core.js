@@ -162,6 +162,7 @@ export function layout(P) {
   L.rT = Math.min(P.TOP_R, P.R_OUT - 0.5); L.rB = Math.min(P.BOT_R, P.R_OUT - 0.5);
   // 끼움 판: 통 구멍 귀퉁이 rP, 판 귀퉁이 rP − FIT, 둘레 테두리 R 은 판 귀퉁이 R·판 두께보다 0.5 작게(뚜껑 eL, 바닥 eC)
   L.rP = Math.min(P.PLATE_R, Math.min(L.IX, L.IY) / 2 - 1);
+  L.ri = P.JOINT === 1 ? L.rP : Math.max(P.R_OUT - P.WALL, 0.3);   // 안쪽 공간 귀퉁이 R — 끼움형은 판·통 구멍·기둥 바깥 귀퉁이가 모두 같은 R
   const rpp = Math.max(L.rP - P.FIT, 0.3);
   // 끼움형 바닥판 반달 손가락 구멍: c = 곧은 변 중심, v = 둥근 쪽 방향. 곧은 변에 손끝을 걸어 당긴다. box = 반달을 감싸는 평면 사각형
   { const c = [P.PULL_X, P.PULL_Y], r = P.NOTCH_R, v = [Math.round(Math.cos(P.PULL_DIR * Math.PI / 180)), Math.round(Math.sin(P.PULL_DIR * Math.PI / 180))];
@@ -254,6 +255,8 @@ export function check(P, L) {
   info('ST003 모듈: 사진상 둥근 캡(약 Ø11.5)이 끼워져 있다 — 캡을 쓰면 버튼 구멍 Ø12.5, 스위치 높이는 PCB~캡 끝 실측값으로');
   if (P.JOINT === 1) {
     const g0 = P.R_OUT - P.WALL, tc = L.rP < g0 ? P.R_OUT - ((g0 - L.rP) * Math.SQRT2 + L.rP) : P.WALL;
+    const cr = P.COL_D / 2, m = Math.max(P.INS3_HOLE, P.MAG_D, P.LID_CB_D) / 2 + 1.2;
+    if (L.rP > cr && L.rP - (L.rP - cr) * Math.SQRT2 < m) err(`끼움 판 귀퉁이 R ${L.rP.toFixed(1)} 이 모서리 기둥의 인서트·자석·볼트 자리를 깎음 — 귀퉁이 R 을 줄이거나 기둥 지름을 키울 것`);
     if (tc < 1.2) warn(`끼움 판 귀퉁이 R 이 작아 통 구멍 귀퉁이 벽이 ${tc.toFixed(1)}mm — 1.2 이상 권장(귀퉁이 R 을 키울 것)`);
     if (P.EDGE_R > Math.min(L.eL, L.eC)) info(`끼움 판 둘레 테두리 R 은 뚜껑 ${L.eL.toFixed(1)}·바닥 ${L.eC.toFixed(1)}mm 까지(판 두께·귀퉁이 R − 0.5)`);
   }
@@ -304,7 +307,7 @@ const stadium = (r, z0, z1) => {
 
 export function model(P) {
   const L = layout(P), warn = check(P, L);
-  const { IX, IY, IH, ZD0, ZD1, ZS } = L, W = P.WALL, ri = Math.max(P.R_OUT - W, 0.3), cr = P.COL_D / 2, top = IH + P.LID_T;
+  const { IX, IY, IH, ZD0, ZD1, ZS } = L, W = P.WALL, ri = L.ri, cr = P.COL_D / 2, top = IH + P.LID_T;
   // 바깥 외피 하나(세로 R + 윗면·아랫면 테두리 R)를 세 부품이 나눠 곡면이 이어진다.
   // 끼움형(J): 옆면은 통이 전부 갖고 뚜껑·바닥은 통 윗·아랫구멍에 끼우는 판 → 옆면에 이음선 없음. 적층형: 높이(ZS, IH)로 잘라 쌓는다
   const J = P.JOINT === 1, zb = J ? 0 : ZS;   // zb: 통 배터리 칸 벽 밑
