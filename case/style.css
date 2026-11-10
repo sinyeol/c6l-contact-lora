@@ -1,6 +1,6 @@
 :root {
   --bg: #F4F2EE; --card: #fff; --ink: #1f1d1a; --mute: #7a756d; --line: #e4e0d8;
-  --accent: #2f4f6f; --base: #7fa3c4; --lid: #e0a768; --lidb: #8fbf8f; --sel: #d6336c;
+  --accent: #2f4f6f; --base: #7fa3c4; --lid: #e0a768; --lidb: #8fbf8f; --shelf: #b49ad6; --sel: #d6336c;
   --err: #c0392b; --warn: #b9770e; --info: #2f6f8f;
 }
 * { box-sizing: border-box; }
@@ -58,6 +58,7 @@ tr.w-info td { background: #eef5f9; color: var(--info); font-style: italic; }
 .note { font-size: 11px; color: var(--mute); margin-top: 8px; }
 .part { stroke: #333; stroke-width: 1; vector-effect: non-scaling-stroke; fill-opacity: .45; }
 .part.bat { fill: none; stroke-dasharray: 5 3; stroke: #8a8378; } .part.c6l { fill: #5b6b7d; } .part.pcb { fill: #3f8f5a; } .part.sw { fill: #222; fill-opacity: .6; }
+.shelf { fill: var(--shelf); fill-opacity: .6; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .wall { fill: var(--base); fill-opacity: .35; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; fill-rule: evenodd; }
 .lidp { fill: var(--lid); fill-opacity: .45; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .cap { fill: var(--sel); fill-opacity: .55; stroke: #555; stroke-width: 1; vector-effect: non-scaling-stroke; }

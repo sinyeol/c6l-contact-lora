@@ -1,6 +1,6 @@
 # C6L 버튼 케이스 — 설계툴(case/index.html)이 저장한 c6l-case.json 의 CSG 트리를 Fusion B-rep 으로 만든다.
 # 형상 규칙은 전부 case/core.js 에 있고, 여기서는 box/cyl/frustum/torus/rslab/add/sub/and 만 해석한다.
-# Fusion: Shift+S → C6LCaseBuild 실행 → 새 문서에 Lid·Body·Cover·Keys(+REF_ 부품), out/ 에 STL(조립 자세).
+# Fusion: Shift+S → C6LCaseBuild 실행 → 새 문서에 Lid·Body·Shelf·Cover·Keys(+REF_ 부품), out/ 에 STL(조립 자세).
 # json: 이 폴더와 ~/Downloads 의 c6l-case*.json(브라우저가 붙이는 " (1)" 포함) 중 가장 최근 것.
 import os, json, math, glob
 
