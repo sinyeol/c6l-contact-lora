@@ -36,7 +36,7 @@ python3 -m http.server 8817 -d case
 |---|---|
 | `core.js` | 단일 진실: 파라미터(`DEFS`) → 배치 → 경고 → CSG 트리(box/cyl/frustum/torus/add/sub/and) |
 | `csg.js` | 트리 → manifold-3d 3.5.4 메시, 바이너리 STL |
-| `app.js`, `index.html`, `style.css` | 화면(플라이트 케이스 설계 앱과 같은 틀, three.js). 평면도에서 C6L(Y)·PCB·USB-C 드래그, 위치 항목의 "X·Y 가운데" 버튼으로 안쪽 공간 가운데 정렬 |
+| `app.js`, `index.html`, `style.css` | 화면(플라이트 케이스 설계 앱과 같은 틀, three.js). 사이드바: 맨 위 검색 칸(이름·키, Esc 로 지움, 안 쓰는 항목도 흐리게 보임), 묶음 접기(접힘 상태 기억, 제목 옆 기본값에서 바꾼 개수), 지금 고른 결합 방식·USB-C 방식에서 안 쓰는 항목 숨김(`USE`). 평면도에서 C6L(Y)·PCB·USB-C 드래그, 위치 항목의 "X·Y 가운데" 버튼으로 안쪽 공간 가운데 정렬 |
 | `check.mjs` | `node case/check.mjs` — 기본값 오류 0, 세 부품 부피, 슬라이더 양 끝 계산, `C6LCaseBuild/c6l-case.json` 갱신 |
 | `C6LCaseBuild/` | Fusion 스크립트. `c6l-case.json`(이 폴더 또는 ~/Downloads 중 최근 것)의 트리를 TemporaryBRepManager 로 계산, 사각뿔대는 테이퍼 압출, 둥근 외피는 필렛 기능. 완료 창에 부품별 치수·부피 |
 

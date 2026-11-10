@@ -26,18 +26,47 @@ const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } ca
 // ---- 사이드바 ----
 // 위치 항목 → 가운데 정렬 축(안쪽 공간 기준). C6L 은 SMA 가 벽에 붙어 있어 Y 만
 const CENTER = { C6L_Y: 'y', PCB_CX: 'x', PCB_CY: 'y', USBC_CX: 'x', USBC_CY: 'y', USBW_CX: 'x', USBW_CY: 'y' };
+// 지금 고른 방식에서 쓰이지 않는 항목(없으면 늘 씀) — 사이드바에서 숨긴다
+const usb = (...m) => P => m.includes(P.USB_MODE), fitted = P => P.JOINT === 1;
+const USE = { FIT: fitted, PLATE_R: fitted, EDGE_R: fitted,
+  USBC_CX: usb(0, 2, 3), USBC_CY: usb(0, 2, 3), USBC_ROT: usb(0, 2, 3), USBW_CX: usb(3), USBW_CY: usb(3), USBW_T: usb(3),
+  USBC_SLOT_W: usb(0, 3), USBC_SLOT_T: usb(0, 3), CBL_L: usb(2, 3), CBL_W: usb(2, 3), PLUG_L: usb(2), INS2_HOLE: usb(0, 3), INS2_L: usb(0, 3) };
+const UI_KEY = 'c6lcase.ui.closed';
+const closed = (() => { try { return new Set(JSON.parse(localStorage.getItem(UI_KEY)) ?? []); } catch { return new Set(); } })();
+// 검색어가 있으면 이름·키가 맞는 항목만(안 쓰는 항목도 흐리게 보임), 없으면 안 쓰는 항목을 숨기고 접힘 상태를 되돌린다
+function refreshSide() {
+  const q = $('q').value.trim().toLowerCase();
+  for (const det of $('controls').querySelectorAll('details')) {
+    let shown = 0, changed = 0;
+    for (const row of det.querySelectorAll('[data-row]')) {
+      const k = row.dataset.row, use = USE[k]?.(P) ?? true;
+      row.hidden = q ? !`${DEF[k][2]} ${k}`.toLowerCase().includes(q) : !use;
+      row.classList.toggle('off', !use);
+      shown += !row.hidden; changed += use && P[k] !== DEF[k][7];
+    }
+    det.hidden = !shown;
+    det.querySelector('.chg').textContent = changed ? `${changed}개 바꿈` : '';
+    det.open = !!q || !closed.has(det.dataset.g);
+  }
+}
 function buildControls() {
-  let h = '';
+  let h = '<div class="search"><input type="search" id="q" placeholder="항목 찾기 (예: 리브, R, 받침벽)" aria-label="항목 찾기"></div>';
   for (const g of [...new Set(DEFS.map(d => d[0]))]) {
-    h += `<fieldset><legend>${esc(g)}</legend>`;
+    h += `<details data-g="${esc(g)}"><summary>${esc(g)} <span class="chg"></span></summary>`;
     for (const [, key, label, min, max, step, unit, , opts] of DEFS.filter(d => d[0] === g))
-      if (opts) h += `<div class="sel-row"><label for="n-${key}">${esc(label)}</label><select id="n-${key}" data-key="${key}">${opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>`;
-      else h += `<div class="row"><label for="n-${key}">${esc(label)} <span style="color:var(--mute)">${esc(unit)}</span>${CENTER[key] ? `<button type="button" class="ctr" data-center="${key}">${CENTER[key].toUpperCase()} 가운데</button>` : ''}</label>`
+      if (opts) h += `<div class="sel-row" data-row="${key}"><label for="n-${key}">${esc(label)}</label><select id="n-${key}" data-key="${key}">${opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>`;
+      else h += `<div class="row" data-row="${key}"><label for="n-${key}">${esc(label)} <span style="color:var(--mute)">${esc(unit)}</span>${CENTER[key] ? `<button type="button" class="ctr" data-center="${key}">${CENTER[key].toUpperCase()} 가운데</button>` : ''}</label>`
         + `<input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" aria-label="${esc(label)}">`
         + `<input type="number" id="n-${key}" data-key="${key}" min="${min}" max="${max}" step="${step}"></div>`;
-    h += '</fieldset>';
+    h += '</details>';
   }
   $('controls').innerHTML = h;
+  $('controls').addEventListener('toggle', e => {   // 검색 중에 열린 것은 기억하지 않는다
+    if ($('q').value.trim() || !e.target.dataset?.g) return;
+    closed[e.target.open ? 'delete' : 'add'](e.target.dataset.g);
+    try { localStorage.setItem(UI_KEY, JSON.stringify([...closed])); } catch {}
+  }, true);
+  $('q').addEventListener('keydown', e => { if (e.key === 'Escape') { e.target.value = ''; refreshSide(); } });
   $('controls').addEventListener('click', e => {
     const k = e.target.dataset?.center;
     if (!k) return;
@@ -46,14 +75,15 @@ function buildControls() {
     syncControls([k]); persist(); schedule();
   });
   $('controls').addEventListener('input', e => {
+    if (e.target.id === 'q') return refreshSide();
     const k = e.target.dataset.key, v = parseFloat(e.target.value);
     if (!k || !Number.isFinite(v)) return;
     P[k] = v;
     for (const el of $('controls').querySelectorAll(`[data-key="${k}"]`)) if (el !== e.target) el.value = v;
-    persist(); schedule();
+    persist(); schedule(); refreshSide();
   });
 }
-const syncControls = (keys = Object.keys(P)) => { for (const k of keys) for (const el of $('controls').querySelectorAll(`[data-key="${k}"]`)) el.value = P[k]; };
+const syncControls = (keys = Object.keys(P)) => { for (const k of keys) for (const el of $('controls').querySelectorAll(`[data-key="${k}"]`)) el.value = P[k]; refreshSide(); };
 
 // ---- 3D ----
 const LIFT = { Lid: 1, REF_C6L: 1, REF_buttonPCB: 1, Cover: -1, REF_battery: -1 };   // 분해 방향(C6L·PCB 는 뚜껑, 배터리는 바닥과 함께)
