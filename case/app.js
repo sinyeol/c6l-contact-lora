@@ -126,6 +126,11 @@ function topSvg(L) {
   for (const [x, y] of L.ribs) s += circ([x, y], 3, 'boss');
   for (const p of L.c6lPads) s += circ(p, P.C6L_PAD_D, 'boss');       // 격판 누름 받침(C6L 밑)
   if (u.mode === 0) s += `<g data-drag="usbc">${rect(u.flange, 'part usb')}${rect(u.slot, 'cut')}${u.holes.map(h => circ(h, 1.8, 'boss')).join('')}${lbl(u.c[0], u.flange[1] - 3.5, 'USB-C')}</g>`;
+  if (u.mode === 3) {   // 세움: 받침벽 + 플랜지 + 누운 플러그 자리 + 케이블 구멍(드래그 = 구멍)
+    const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2, st = u.stand;
+    s += `<g data-drag="usbc">${rect(st.plug, 'zone')}${rect(st.bracket, 'boss')}${rect(st.flange, 'part usb')}${rect(r, 'part usb', `rx="${rr2}"`)}`
+      + lbl((st.bracket[0] + st.bracket[2]) / 2, st.bracket[3] + 1.5, 'USB-C(세움)') + lbl(u.c[0], r[1] - 3.5, '케이블 구멍') + '</g>';
+  }
   if (u.mode === 2) {
     const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2;
     s += `<g data-drag="usbc">${rect(r, 'part usb', `rx="${rr2}"`)}${lbl(u.c[0], r[1] - 3.5, '케이블 구멍')}</g>` + rect(L.plug, 'zone') + lbl(L.c6lUsb[0], L.plug[3] + 1, '플러그');
@@ -179,7 +184,10 @@ function secSvg(L) {
   for (const [x] of L.keysAll) s += rect(x - 6, pz + PCB.T, x + 6, pz + PCB.T + 3.5, 'part sw') + rect(x - 1.75, pz + PCB.T, x + 1.75, pz + PCB.T + P.SW_H, 'part sw');
   for (const [x] of L.stand) s += rect(x - P.STANDOFF_D / 2, IH - L.PCB_GAP, x + P.STANDOFF_D / 2, IH, 'boss');
   if (u.mode === 0) s += rect(u.flange[0], ZD0 - USBC.FT, u.flange[2], ZD0, 'part usb') + rect(u.body[0], ZD0, u.body[2], ZD0 - USBC.FT + USBC.BODY_L, 'part usb');
-  if (u.mode === 2) s += rect(u.cable[0], ZD0, u.cable[2], ZD1, 'cut');
+  if (u.mode >= 2) s += rect(u.cable[0], ZD0, u.cable[2], ZD1, 'cut');
+  if (u.mode === 3) { const st = u.stand;
+    s += rect(st.bracket[0], ZD1, st.bracket[2], st.zTop, 'boss') + rect(st.flange[0], ZD1, st.flange[2], ZD1 + USBC.FH, 'part usb')
+      + rect(st.plug[0], st.zc - 3.25, st.plug[2], st.zc + 3.25, 'zone'); }
   s += `<g class="dim"><line x1="${-W - 5}" y1="${fz(-P.FLOOR)}" x2="${-W - 5}" y2="${fz(top)}"/><text x="${-W - 7}" y="${fz(oz / 2 - P.FLOOR)}" style="font-size:3.6px" transform="rotate(-90 ${-W - 7} ${fz(oz / 2 - P.FLOOR)})">${n1(oz)} mm</text></g>`;
   return s + '</svg>';
 }
@@ -198,6 +206,7 @@ function tables(m, meshes) {
   $('t-parts').innerHTML = '<table><tr><th>자리</th><th>부품</th><th class="n">수량</th></tr>'
     + row('뚜껑 ↔ 통 (모서리 기둥 위)', `${ins(3, P.INS3_L, P.INS3_HOLE)} + M3×${L.bolts.lid} 소켓 볼트`, 4)
     + row('버튼 PCB ↔ 뚜껑 기둥', `${ins(3, P.INS3S_L, P.INS3_HOLE)} + M3×${L.bolts.pcb} 볼트`, 4)
+    + (L.usbc.mode === 3 ? row('USB-C 커넥터 ↔ 격판 위 받침벽(옆으로)', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + (L.usbc.mode === 0 ? row('USB-C 커넥터 ↔ 격판 밑', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + row('바닥 ↔ 통 (기둥 아래)', `네오디뮴 자석 Ø${n1(P.MAG_D)}×${n1(P.MAG_T)} <small>(통·바닥 각 4, 극 맞춰 순간접착)</small>`, 8)
     + row('C6L ↔ 뚜껑', '레고 핀(뚜껑에 일체) — 볼트 없음', 2)
