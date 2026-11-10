@@ -1,7 +1,7 @@
 // 진입점 — 슬라이더·드래그 → core.model → manifold 메시 → 3D·SVG·표. 사이드바는 처음 한 번만 그린다(스크롤·포커스 유지).
 import * as THREE from './vendor/three.module.min.js';
 import { OrbitControls } from './vendor/OrbitControls.js';
-import { DEFS, defaults, model, layout, caseJson, C6L, PCB, USBC } from './core.js';
+import { DEFS, defaults, model, layout, caseJson, C6L, PCB, USBC, M3_CLEAR } from './core.js';
 import { initCsg, meshOf, stl } from './csg.js';
 
 const KEY = 'c6lcase.params.v2';
@@ -27,8 +27,8 @@ const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } ca
 // 위치 항목 → 가운데 정렬 축(안쪽 공간 기준). C6L 은 SMA 가 벽에 붙어 있어 Y 만
 const CENTER = { C6L_Y: 'y', PCB_CX: 'x', PCB_CY: 'y', USBC_CX: 'x', USBC_CY: 'y', USBW_CX: 'x', USBW_CY: 'y', PULL_X: 'x', PULL_Y: 'y' };
 // 지금 고른 방식에서 쓰이지 않는 항목(없으면 늘 씀) — 사이드바에서 숨긴다
-const usb = (...m) => P => m.includes(P.USB_MODE), fitted = P => P.JOINT === 1;
-const USE = { FIT: fitted, PLATE_R: fitted, EDGE_R: fitted, PULL_X: fitted, PULL_Y: fitted, PULL_DIR: fitted,
+const usb = (...m) => P => m.includes(P.USB_MODE), fitted = P => P.JOINT === 1, mag = P => P.COVER_FIX !== 1;
+const USE = { MAG_D: mag, MAG_T: mag, FIT: fitted, PLATE_R: fitted, EDGE_R: fitted, PULL_X: fitted, PULL_Y: fitted, PULL_DIR: fitted,
   USBC_CX: usb(0, 2, 3), USBC_CY: usb(0, 2, 3), USBC_ROT: usb(0, 2, 3), USBW_CX: usb(3), USBW_CY: usb(3), USBW_T: usb(3),
   USBC_SLOT_W: usb(0, 3), USBC_SLOT_T: usb(0, 3), CBL_L: usb(2, 3), CBL_W: usb(2, 3), PLUG_L: usb(2), INS2_HOLE: usb(0, 3), INS2_L: usb(0, 3) };
 const UI_KEY = 'c6lcase.ui.closed', SAVED_KEY = 'c6lcase.saved';
@@ -158,7 +158,7 @@ function topSvg(L) {
   let s = `<svg viewBox="${-W - pad} ${-pad} ${ox + 2 * pad} ${oy + 2 * pad + 8}" role="img" aria-label="평면도">`;
   s += `<path class="wall" d="${rr(-W, -W, L.IX + W, L.IY + W, P.R_OUT, fy)} ${rr(0, 0, L.IX, L.IY, ri, fy)}"/>`;
   s += rect(L.bat, 'part bat') + lbl((L.bat[0] + L.bat[2]) / 2, L.bat[1] + 3, '배터리(격판 밑)');
-  for (const cc of L.cols) s += circ(cc, P.COL_D, 'boss') + circ(cc, P.MAG_D, 'mag');
+  for (const cc of L.cols) s += circ(cc, P.COL_D, 'boss') + circ(cc, P.COVER_FIX === 1 ? M3_CLEAR : P.MAG_D, 'mag');
   for (const r of L.stops) s += rect(r, 'boss');
   for (const [x, y] of L.ribs) s += circ([x, y], 3, 'boss');
   for (const p of L.c6lPads) s += circ(p, P.C6L_PAD_D, 'boss');       // 격판 누름 받침(C6L 밑)
@@ -183,7 +183,7 @@ function topSvg(L) {
   s += rect([mx - wx - o, my - wy - o, mx + wx + o, my + wy + o], 'zone') + rect([mx - wx, my - wy, mx + wx, my + wy], 'cut');
   s += circ(L.ubtn, P.UBTN_D, 'cut');
   for (const k of L.keys) s += circ(k, P.BTN_HOLE_D, 'cut');
-  for (const b of L.cols) s += circ(b, P.LID_CB_D, 'cut');
+  if (P.COVER_FIX !== 1) for (const b of L.cols) s += circ(b, P.LID_CB_D, 'cut');
   for (const p of L.pins) s += circ(p, P.PIN_D, 'cut');
   for (const [sy] of L.sma) s += rect([-W, sy - P.ANT_D / 2, -P.SMA_WALL, sy + P.ANT_D / 2], 'cut');
   const pl = L.pull, a0 = Math.atan2(pl.v[1], pl.v[0]), moon = Array.from({ length: 19 }, (_, i) => a0 - Math.PI / 2 + i * Math.PI / 18)
@@ -211,8 +211,12 @@ function secSvg(L) {
   s += J ? rect(e0, -P.FLOOR, e1, 0, 'cover') + rect(-W, -P.FLOOR, 0, top, 'wall') + rect(IX, -P.FLOOR, IX + W, top, 'wall')
     : rect(-W, -P.FLOOR, IX + W, 0, 'cover') + rect(-W, 0, 0, ZS, 'cover') + rect(IX, 0, IX + W, ZS, 'cover') + rect(-W, ZS, 0, IH, 'wall') + rect(IX, ZS, IX + W, IH, 'wall');
   s += rect(0, ZD0, IX, ZD1, 'wall');
-  for (const [x] of [L.cols[0], L.cols[1]]) s += rect(x - P.COL_D / 2, 0, x + P.COL_D / 2, ZS, 'cover') + rect(x - P.COL_D / 2, ZS, x + P.COL_D / 2, IH, 'boss')
-    + rect(x - P.MAG_D / 2, ZS - P.MAG_T, x + P.MAG_D / 2, ZS + P.MAG_T, 'mag') + rect(x - P.INS3_HOLE / 2, IH - P.INS3_L, x + P.INS3_HOLE / 2, IH, 'mag');
+  const cT = IH - L.lidBoss, hc = P.COL_D / 2;
+  for (const [x] of [L.cols[0], L.cols[1]]) s += rect(x - hc, 0, x + hc, ZS, 'cover') + rect(x - hc, ZS, x + hc, cT, 'boss')
+    + (P.COVER_FIX === 1   // 볼트: 뚜껑 밑 기둥(인서트) + 관통 구멍 + 바닥 밑 머리 자리
+      ? rect(x - hc, cT, x + hc, IH, 'lidp') + rect(x - M3_CLEAR / 2, -P.FLOOR, x + M3_CLEAR / 2, cT, 'cut')
+        + rect(x - P.LID_CB_D / 2, -P.FLOOR, x + P.LID_CB_D / 2, -P.FLOOR + P.LID_CB_H, 'cut') + rect(x - P.INS3_HOLE / 2, cT, x + P.INS3_HOLE / 2, cT + P.INS3_L, 'mag')
+      : rect(x - P.MAG_D / 2, ZS - P.MAG_T, x + P.MAG_D / 2, ZS + P.MAG_T, 'mag') + rect(x - P.INS3_HOLE / 2, IH - P.INS3_L, x + P.INS3_HOLE / 2, IH, 'mag'));
   // 뚜껑: OLED 자리는 MASK_T 로 얇게
   const [mx] = L.oled, wx = P.OLED_WX / 2, o = L.maskOff;
   s += `<path class="lidp" d="M${e0},${fz(IH)} H${mx - wx} V${fz(IH + P.MASK_T)} L${mx - wx - o},${fz(top)} H${e0} Z M${mx + wx},${fz(IH)} H${e1} V${fz(top)} H${mx + wx + o} L${mx + wx},${fz(IH + P.MASK_T)} Z"/>`;
@@ -243,11 +247,12 @@ function tables(m, meshes) {
     + '</table>';
   const ins = (d, l, hole) => `M${d} 열삽입 인서트 L${n1(l)} <small>(구멍 Ø${n1(hole)})</small>`;
   $('t-parts').innerHTML = '<table><tr><th>자리</th><th>부품</th><th class="n">수량</th></tr>'
-    + row('뚜껑 ↔ 통 (모서리 기둥 위)', `${ins(3, P.INS3_L, P.INS3_HOLE)} + M3×${L.bolts.lid} 소켓 볼트`, 4)
+    + (P.COVER_FIX === 1 ? row('바닥 → 통 기둥 관통 → 뚜껑 밑 기둥', `${ins(3, P.INS3_L, P.INS3_HOLE)} + M3×${L.bolts.cover} 소켓 볼트`, 4)
+      : row('뚜껑 ↔ 통 (모서리 기둥 위)', `${ins(3, P.INS3_L, P.INS3_HOLE)} + M3×${L.bolts.lid} 소켓 볼트`, 4))
     + row('버튼 PCB ↔ 뚜껑 기둥', `${ins(3, P.INS3S_L, P.INS3_HOLE)} + M3×${L.bolts.pcb} 볼트`, 4)
     + (L.usbc.mode === 3 ? row('USB-C 커넥터 ↔ 뚜껑 밑 받침벽(옆으로)', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + (L.usbc.mode === 0 ? row('USB-C 커넥터 ↔ 격판 밑', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
-    + row('바닥 ↔ 통 (기둥 아래)', `네오디뮴 자석 Ø${n1(P.MAG_D)}×${n1(P.MAG_T)} <small>(통·바닥 각 4, 극 맞춰 순간접착)</small>`, 8)
+    + (P.COVER_FIX === 1 ? '' : row('바닥 ↔ 통 (기둥 아래)', `네오디뮴 자석 Ø${n1(P.MAG_D)}×${n1(P.MAG_T)} <small>(통·바닥 각 4, 극 맞춰 순간접착)</small>`, 8))
     + row('C6L ↔ 뚜껑', '레고 핀(뚜껑에 일체) — 볼트 없음', 2)
     + '</table>';
   $('t-warn').innerHTML = m.warn.length ? `<table><tr><th>수준</th><th>내용</th></tr>${m.warn.map(([lv, t]) => `<tr class="w-${lv}"><td class="lv ${lv}">${lv}</td><td>${esc(t)}</td></tr>`).join('')}</table>`

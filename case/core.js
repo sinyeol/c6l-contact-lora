@@ -38,7 +38,8 @@ export const DEFS = [
   ['배터리·바닥', 'BAT_GAP', '배터리 위 틈', 0, 5, 0.5, 'mm', 1],
   ['배터리·바닥', 'CABLE_BAY', '+X 쪽 케이블 자리', 0, 40, 0.5, 'mm', 16],
   ['배터리·바닥', 'EXTRA_Y', '안쪽 깊이 추가(Y, PCB 세로 배치용)', 0, 40, 0.5, 'mm', 0],
-  ['배터리·바닥', 'SEAM_H', '바닥 높이 (끼움형: 자석 기둥, 적층형: 바닥 벽 · 최대 = 격판 밑)', 0, 40, 0.5, 'mm', 4],
+  ['배터리·바닥', 'COVER_FIX', '바닥 고정', 0, 1, 1, '', 0, [[0, '자석 — 모서리 기둥 자석으로 붙임'], [1, '볼트 — 바닥에서 통 기둥 관통, 뚜껑 인서트에 체결']]],
+  ['배터리·바닥', 'SEAM_H', '바닥 높이 (끼움형: 바닥 기둥, 적층형: 바닥 벽 · 최대 = 격판 밑)', 0, 40, 0.5, 'mm', 4],
   ['배터리·바닥', 'RIB_PRESS', '배터리 누름 리브 조임 (0 = 없음)', 0, 1, 0.05, 'mm', 0.3],
   ['배터리·바닥', 'COL_D', '모서리 기둥 지름', 7, 14, 0.5, 'mm', 9.5],
   ['배터리·바닥', 'MAG_D', '자석 지름', 3, 10, 0.5, 'mm', 6],
@@ -91,8 +92,8 @@ export const DEFS = [
   ['인서트·볼트', 'INS3S_L', 'PCB 기둥용 짧은 M3 인서트 길이', 2.5, 6, 0.1, 'mm', 4],
   ['인서트·볼트', 'INS2_HOLE', 'M2 인서트 구멍 지름', 2.6, 4, 0.05, 'mm', 3.2],
   ['인서트·볼트', 'INS2_L', 'M2 인서트 길이', 2, 5, 0.1, 'mm', 3],
-  ['인서트·볼트', 'LID_CB_D', '뚜껑 볼트 머리 자리 지름', 5, 8, 0.1, 'mm', 6.2],
-  ['인서트·볼트', 'LID_CB_H', '뚜껑 볼트 머리 자리 깊이', 0, 3, 0.1, 'mm', 1.5],
+  ['인서트·볼트', 'LID_CB_D', '볼트 머리 자리 지름 (자석: 뚜껑 윗면, 볼트: 바닥 밑면)', 5, 8, 0.1, 'mm', 6.2],
+  ['인서트·볼트', 'LID_CB_H', '볼트 머리 자리 깊이', 0, 3, 0.1, 'mm', 1.5],
 ];
 export const defaults = () => Object.fromEntries(DEFS.map(d => [d[1], d[7]]));
 
@@ -168,8 +169,11 @@ export function layout(P) {
     L.pull = { c, r, v, box: [lo(0), lo(1), hi(0), hi(1)] }; }
   L.eL = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.LID_T - 0.5), 0); L.eC = Math.max(Math.min(P.EDGE_R, rpp - 0.5, P.FLOOR - 0.5), 0);   // 필렛(Fusion)·토러스(manifold) 모두 세로 R 보다 작아야 한다
   // 볼트 길이: 체결 두께 + 인서트 길이 − 0.5 이하의 표준 길이
-  const std = n => [3, 4, 5, 6, 8, 10, 12, 16].filter(v => v <= n).pop() ?? 3;
-  L.bolts = { lid: std(P.LID_T - P.LID_CB_H + P.INS3_L - 0.5), pcb: std(PCB.T + P.INS3S_L - 0.5), usbc: std(USBC.FT + P.INS2_L - 0.3) };
+  const std = n => [3, 4, 5, 6, 8, 10, 12, 16, 20, 25, 30, 35, 40].filter(v => v <= n).pop() ?? 3;
+  // 바닥 볼트 고정: 뚜껑 밑에 기둥(lidBoss)을 내려 인서트를 박고(윗면 1mm 남김), 통 기둥은 그만큼 낮춘다. 볼트는 바닥 밑 머리 자리에서 관통
+  L.lidBoss = P.COVER_FIX === 1 ? Math.max(P.INS3_L + 1.5 - P.LID_T, 1) : 0;
+  L.coverBoltN = L.IH - L.lidBoss + P.INS3_L - 0.5 - (-P.FLOOR + P.LID_CB_H);   // 머리 자리 바닥 ~ 인서트 끝 0.5 전
+  L.bolts = { cover: std(L.coverBoltN), lid: std(P.LID_T - P.LID_CB_H + P.INS3_L - 0.5), pcb: std(PCB.T + P.INS3S_L - 0.5), usbc: std(USBC.FT + P.INS2_L - 0.3) };
   return L;
 }
 
@@ -232,9 +236,17 @@ export function check(P, L) {
   if (thread < 4) warn(`SMA 나사가 벽 밖으로 ${thread.toFixed(1)}mm 만 나옴(4mm 이상 권장)`);
   if (P.SMA_WALL >= P.WALL) warn('안테나 자리 벽이 벽 두께 이상 — 파기 효과 없음');
   const colH = L.IH - L.ZS;
-  if (P.INS3_L + 0.5 + P.MAG_T + 0.2 > colH - 1) err(`모서리 기둥(통 쪽 ${colH.toFixed(1)}mm)에 인서트와 자석 자리가 겹침`);
-  if (P.COL_D < Math.max(P.INS3_HOLE, P.MAG_D) + 2.4) warn('모서리 기둥 벽이 1.2mm 미만 — 인서트·자석 자리 주변이 약하다');
-  if (L.ZS + P.FLOOR < P.MAG_T + 0.2 + 0.6) err('바닥 자석 자리가 바닥판을 뚫음 — 바닥 자석 기둥 높이나 바닥판 두께를 늘릴 것');
+  if (P.COVER_FIX === 1) {
+    const grip = P.INS3_L - 0.5 - (L.coverBoltN - L.bolts.cover);
+    if (grip < 3) warn(`바닥 볼트 M3×${L.bolts.cover} 가 뚜껑 인서트에 ${grip.toFixed(1)}mm 만 물림(3 이상 권장) — 머리 자리 깊이·길이 확인`);
+    if (P.LID_CB_H > P.FLOOR + L.ZS - 1) err('바닥 볼트 머리 자리가 바닥 기둥보다 깊음 — 머리 자리 깊이를 줄이거나 바닥 높이를 늘릴 것');
+    if (P.COL_D < Math.max(P.INS3_HOLE, P.LID_CB_D) + 2.4) warn('모서리 기둥 벽이 1.2mm 미만 — 인서트·볼트 머리 자리 주변이 약하다');
+    info(`바닥 볼트 고정: 바닥 밑에서 M3×${L.bolts.cover} 4개가 통 기둥을 지나 뚜껑 밑 기둥 인서트에 체결 — 뚜껑·통·바닥을 한 번에 조인다`);
+  } else {
+    if (P.INS3_L + 0.5 + P.MAG_T + 0.2 > colH - 1) err(`모서리 기둥(통 쪽 ${colH.toFixed(1)}mm)에 인서트와 자석 자리가 겹침`);
+    if (P.COL_D < Math.max(P.INS3_HOLE, P.MAG_D) + 2.4) warn('모서리 기둥 벽이 1.2mm 미만 — 인서트·자석 자리 주변이 약하다');
+    if (L.ZS + P.FLOOR < P.MAG_T + 0.2 + 0.6) err('바닥 자석 자리가 바닥판을 뚫음 — 바닥 자석 기둥 높이나 바닥판 두께를 늘릴 것');
+  }
   if (L.PCB_GAP + P.LID_T - 0.8 < P.INS3S_L + 0.5) err('PCB 기둥+뚜껑이 짧은 M3 인서트보다 짧음 — 인서트 길이·스위치 높이 확인');
   if (P.STANDOFF_D < P.INS3_HOLE + 2.4) warn('PCB 기둥 벽이 1.2mm 미만');
   if (P.PIN_LEN > C6L.T) warn('레고 핀이 C6L 두께(8mm)보다 김');
@@ -252,9 +264,10 @@ export function check(P, L) {
   if (tTop < 1.2) warn(`윗면 테두리 R 때문에 통 윗모서리 벽이 ${tTop.toFixed(1)}mm — 1.2 이상 권장`);
   if (tBot < 1.2) warn(`아랫면 테두리 R 때문에 바닥 아랫모서리 벽이 ${tBot.toFixed(1)}mm — 1.2 이상 권장`);
   // 뚜껑 볼트 머리 자리가 윗면 평평한 곳에 있는지(바깥 모서리 기준 거리 a,b)
-  const a = W2 + P.COL_D / 2, R = P.R_OUT, flat = a < R ? (R - L.rT) - Math.hypot(R - a, R - a) : a - L.rT;
-  if (flat < P.LID_CB_D / 2 + 0.2) warn('뚜껑 볼트 머리 자리가 둥근 테두리에 걸림 — 윗면 R 을 줄이거나 기둥을 키울 것');
-  if (P.SEAM_H > L.ZD0) info(`바닥 자석 기둥은 격판 밑(${L.ZD0}mm)까지만 — 그 값으로 맞춤`);
+  const a = W2 + P.COL_D / 2, R = P.R_OUT;
+  const rEdge = P.COVER_FIX === 1 ? L.rB : L.rT, flat = a < R ? (R - rEdge) - Math.hypot(R - a, R - a) : a - rEdge;
+  if (flat < P.LID_CB_D / 2 + 0.2) warn(`${P.COVER_FIX === 1 ? '바닥' : '뚜껑'} 볼트 머리 자리가 둥근 테두리에 걸림 — ${P.COVER_FIX === 1 ? '아랫면' : '윗면'} R 을 줄이거나 기둥을 키울 것`);
+  if (P.SEAM_H > L.ZD0) info(`바닥 기둥은 격판 밑(${L.ZD0}mm)까지만 — 그 값으로 맞춤`);
   if (P.JOINT === 1) info('끼움형: 통은 옆면 전체를 갖고 격판이 가운데 떠 있다 — 배터리 칸(아랫구멍을 바닥에 두고) 또는 전자부 칸에 서포트가 필요하다. 뚜껑은 뒤집어서, 바닥은 판을 아래로 서포트 없이');
   else if (L.ZS < L.ZD0) info('적층형: 통이 격판 밑으로 내려와 배터리를 벽·멈춤턱으로 잡는다 — 배터리 칸에 서포트가 필요하다(바닥 높이를 최대로 하면 서포트 없이 출력되지만 배터리는 바닥이 잡는다)');
   if (P.JOINT !== 1 && L.ribs.length && L.ZD0 - L.ZS <= 3) info('바닥 벽이 높아 통에 배터리 누름 리브 자리가 없음 — 리브를 넣으려면 바닥 높이를 낮출 것');
@@ -309,6 +322,9 @@ export function model(P) {
     return and(add(...[[0, 0], [dx, 0], [0, dy], [dx, dy]].map(([ox, oy]) => vcyl([x + ox, y + oy], z0, z1, cr))), clip);
   };
   const magnet = (c, zFace, up) => vcyl(c, up ? zFace - 1 : zFace - P.MAG_T - 0.2, up ? zFace + P.MAG_T + 0.2 : zFace + 1, P.MAG_D / 2 + 0.1);
+  // 바닥 고정: 자석 = 통·바닥 기둥 맞닿는 면에 자석 자리, 볼트 = 관통 구멍 + 바닥 밑 머리 자리(통 기둥 윗부분 lidBoss 는 뚜껑이 갖는다)
+  const B = P.COVER_FIX === 1, colTop = IH - L.lidBoss;
+  const coverFix = c => B ? [vcyl(c, -P.FLOOR - 1, ZS + 1, M3_CLEAR / 2), vcyl(c, -P.FLOOR - 1, -P.FLOOR + P.LID_CB_H, P.LID_CB_D / 2)] : [magnet(c, ZS, false)];
 
   // Body: 벽(끼움형: 바닥~윗면, 적층형: ZS~IH) + 격판 + 기둥(위 = M3 인서트·뚜껑 받침, 아래 = 자석) + USB-C 자리
   const u = L.usbc, st = u.stand, usbHoles = u.mode === 0 ? [u.flange] : u.mode === 2 ? [u.cable] : u.mode === 3 ? [u.cable, st.foot] : [];
@@ -317,7 +333,7 @@ export function model(P) {
     add(J ? sub(slab(-P.FLOOR - 1, top + 1), cav(-0.5, IH + 0.5), hole(-P.FLOOR - 2, 0), hole(IH, top + 2)) : sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
       cav(ZD0, ZD1),
       ...L.c6lPads.filter(p => !usbHoles.some(r => overlap(sq(p, P.C6L_PAD_D), r))).map(p => vcyl(p, ZD1 - 0.1, IH - C6L.T + P.C6L_PRESS, P.C6L_PAD_D / 2)),
-      ...L.cols.map(c => column(c, ZS, IH)),
+      ...L.cols.map(c => column(c, ZS, colTop)),
       ...(zb < ZD0 ? L.stops.map(r => rect(r, zb, ZD0 + 0.5)) : []),
       // 누름 리브: 아래 2mm 는 가늘게(조임 0) 시작해 배터리가 걸리지 않고 들어간다. 벽까지 판으로 이어 한 덩어리로
       ...(ZD0 - zb > 3 ? L.ribs.flatMap(([x, y, wy]) => [
@@ -325,8 +341,7 @@ export function model(P) {
         box(x - RIB_R, Math.min(y, wy), zb, x + RIB_R, Math.max(y, wy), ZD0 + 0.5)]) : []),
       ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : []),
 ),
-    ...L.cols.map(c => vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2)),
-    ...L.cols.map(c => magnet(c, ZS, true)),
+    ...L.cols.flatMap(c => B ? [vcyl(c, ZS - 1, IH + 1, M3_CLEAR / 2)] : [vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2), magnet(c, ZS, true)]),
     ...L.sma.flatMap(([sy, sz]) => [            // -X 벽: 위가 열린 SMA 홈(끼움형: 뚜껑 혀가 윗부분을 메움) + 바깥에서 안테나 지름만큼 파서 벽을 얇게
       cyl([-W - 1, sy, sz], [1, sy, sz], P.SMA_HOLE_D / 2),
       box(-W - 1, sy - P.SMA_HOLE_D / 2, sz, 1, sy + P.SMA_HOLE_D / 2, (J ? top : IH) + 1),
@@ -341,7 +356,7 @@ export function model(P) {
     const pull = [and(add(vcyl([px, py], -P.FLOOR - 1, 1, r), cyl([px, py, -P.FLOOR - 1], [px, py, -P.FLOOR + 0.8], r + 1.8, r)), half)];   // 반달 + 바깥 모서리 0.8 모따기
     // Cover: 통 아랫구멍에 끼우는 판 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
     cover = sub(add(and(env, plate(-P.FLOOR, 0, 0, L.eC)), ...(ZS > 0.5 ? L.cols.map(c => column(c, -0.5, ZS, plug(-0.5, ZS))) : [])),
-      ...L.cols.map(c => magnet(c, ZS, false)), ...pull);
+      ...L.cols.flatMap(coverFix), ...pull);
   } else {
     // 손가락 홈(바깥에서만, 안쪽 0.8 남김)은 이음선의 높은 쪽 부품에 — 바닥이 낮으면 통에 파서 바닥 벽 윗모서리를 손끝으로 당긴다
     const notch = cyl([IX / 2, -W - 1, ZS], [IX / 2, -0.8, ZS], P.NOTCH_R), notchInBody = ZS + P.FLOOR < ZD0 - ZS;
@@ -349,7 +364,7 @@ export function model(P) {
     // Cover: 바닥판 + 벽(ZS) + 기둥 자석 자리 + 멈춤턱 아랫부분
     cover = sub(ZS > 0.5
       ? add(sub(slab(-P.FLOOR - 1, ZS), cav(0, ZS + 1)), ...L.cols.map(c => column(c, -0.5, ZS)), ...L.stops.map(r => rect(r, -0.5, ZS)))
-      : slab(-P.FLOOR - 1, ZS), ...L.cols.map(c => magnet(c, ZS, false)), ...(notchInBody ? [] : [notch]));
+      : slab(-P.FLOOR - 1, ZS), ...L.cols.flatMap(coverFix), ...(notchInBody ? [] : [notch]));
   }
 
   // Lid: 조립 위치(z=IH 위). 출력은 뒤집어서
@@ -359,7 +374,8 @@ export function model(P) {
   const lid = sub(add(J ? and(env, add(plate(IH, top, L.eL, 0), ...tabs)) : slab(IH, top + 1),
       ...L.pins.flatMap(([x, y]) => [cyl([x, y, IH - P.PIN_LEN + 0.6], [x, y, IH], pin), cyl([x, y, IH - P.PIN_LEN], [x, y, IH - P.PIN_LEN + 0.6], pin - 0.5, pin)]),
       and(add(...L.stand.map(s => vcyl(s, IH - g, IH + 0.5, P.STANDOFF_D / 2))), plug(IH - g - 1, IH + 0.5)),   // 벽 쪽은 끼우는 판 윤곽으로 잘라 통에 닿지 않게
-      ...(u.mode === 3 ? [and(add(...[st.bracket, ...st.ribs].map(r => rect(r, st.z0, IH + 0.5))), plug(st.z0 - 1, IH + 0.5))] : [])),   // 세운 USB-C 받침벽(뚜껑 밑)
+      ...(u.mode === 3 ? [and(add(...[st.bracket, ...st.ribs].map(r => rect(r, st.z0, IH + 0.5))), plug(st.z0 - 1, IH + 0.5))] : []),
+      ...(B ? L.cols.map(c => column(c, colTop, IH + 0.5, plug(colTop - 1, IH + 0.5))) : [])),   // 볼트 고정: 뚜껑 밑 인서트 기둥   // 세운 USB-C 받침벽(뚜껑 밑)
     ...L.stand.map(s => vcyl(s, IH - g - 1, IH - g + P.INS3S_L + 0.5, P.INS3_HOLE / 2)),
     box(L.oled[0] - P.OLED_WX / 2, L.oled[1] - P.OLED_WY / 2, IH - 1, L.oled[0] + P.OLED_WX / 2, L.oled[1] + P.OLED_WY / 2, top + 1),
     // OLED 마스크: 창 둘레는 MASK_T, 바깥으로 경사져 올라가 뚜껑 두께로
@@ -367,7 +383,7 @@ export function model(P) {
       off: (top + 0.5 - IH - P.MASK_T) / Math.tan(P.MASK_SLOPE * Math.PI / 180) }] : []),
     vcyl(L.ubtn, IH - 1, top + 1, P.UBTN_D / 2),
     ...L.keys.map(k => vcyl(k, IH - 1, top + 1, P.BTN_HOLE_D / 2)),
-    ...L.cols.flatMap(c => [vcyl(c, IH - 1, top + 1, M3_CLEAR / 2), vcyl(c, top - P.LID_CB_H, top + 1, P.LID_CB_D / 2)]),
+    ...L.cols.flatMap(c => B ? [vcyl(c, colTop - 1, top - 1, P.INS3_HOLE / 2)] : [vcyl(c, IH - 1, top + 1, M3_CLEAR / 2), vcyl(c, top - P.LID_CB_H, top + 1, P.LID_CB_D / 2)]),
     ...(P.SMA_WALL < W ? L.sma.map(smaRecess) : []),
     ...(u.mode === 3 ? [rect(st.slot, st.zc - P.USBC_SLOT_T / 2, st.zc + P.USBC_SLOT_T / 2), ...st.ins.map(([a, b]) => cyl(a, b, P.INS2_HOLE / 2))] : []));
 
