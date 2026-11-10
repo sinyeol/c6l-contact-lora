@@ -31,7 +31,9 @@ const usb = (...m) => P => m.includes(P.USB_MODE), fitted = P => P.JOINT === 1;
 const USE = { FIT: fitted, PLATE_R: fitted, EDGE_R: fitted,
   USBC_CX: usb(0, 2, 3), USBC_CY: usb(0, 2, 3), USBC_ROT: usb(0, 2, 3), USBW_CX: usb(3), USBW_CY: usb(3), USBW_T: usb(3),
   USBC_SLOT_W: usb(0, 3), USBC_SLOT_T: usb(0, 3), CBL_L: usb(2, 3), CBL_W: usb(2, 3), PLUG_L: usb(2), INS2_HOLE: usb(0, 3), INS2_L: usb(0, 3) };
-const UI_KEY = 'c6lcase.ui.closed';
+const UI_KEY = 'c6lcase.ui.closed', SAVED_KEY = 'c6lcase.saved';
+// 마지막으로 case.json 을 저장한 값(없으면 기본값) — 이것과 다른 값은 색으로 표시
+let saved = (() => { try { return { ...defaults(), ...JSON.parse(localStorage.getItem(SAVED_KEY)) }; } catch { return defaults(); } })();
 const closed = (() => { try { return new Set(JSON.parse(localStorage.getItem(UI_KEY)) ?? []); } catch { return new Set(); } })();
 // 검색어가 있으면 이름·키가 맞는 항목만(안 쓰는 항목도 흐리게 보임), 없으면 안 쓰는 항목을 숨기고 접힘 상태를 되돌린다
 function refreshSide() {
@@ -42,10 +44,12 @@ function refreshSide() {
       const k = row.dataset.row, use = USE[k]?.(P) ?? true;
       row.hidden = q ? !`${DEF[k][2]} ${k}`.toLowerCase().includes(q) : !use;
       row.classList.toggle('off', !use);
-      shown += !row.hidden; changed += use && P[k] !== DEF[k][7];
+      const mod = P[k] !== saved[k];
+      row.classList.toggle('mod', mod);
+      shown += !row.hidden; changed += use && mod;
     }
     det.hidden = !shown;
-    det.querySelector('.chg').textContent = changed ? `${changed}개 바꿈` : '';
+    det.querySelector('.chg').textContent = changed ? `${changed}개 수정` : '';
     det.open = !!q || !closed.has(det.dataset.g);
   }
 }
@@ -304,7 +308,12 @@ function download(name, data, type) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $('btn-reset').onclick = () => { P = defaults(); persist(); syncControls(); rebuild(); };
-$('btn-json').onclick = () => download('c6l-case.json', JSON.stringify(caseJson(P), null, 1), 'application/json');
+$('btn-json').onclick = () => {
+  download('c6l-case.json', JSON.stringify(caseJson(P), null, 1), 'application/json');
+  saved = { ...P };
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch {}
+  refreshSide();
+};
 for (const n of ['Lid', 'Body', 'Cover'])     // 뚜껑은 X축 180°(윗면이 바닥), 통은 격판이 바닥에 오도록 그대로
   $('btn-stl-' + n).onclick = () => cur?.meshes && download(`c6l_case_${n.toLowerCase()}.stl`, stl(cur.meshes[n], n === 'Lid' ? (x, y, z) => [x, -y, -z] : undefined), 'model/stl');
 for (const id of ['ly-lid', 'ly-body', 'ly-cover', 'ly-ref', 'lift']) $(id).addEventListener('input', show3d);

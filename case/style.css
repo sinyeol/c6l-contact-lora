@@ -11,8 +11,10 @@ body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 -app
 h1 { font-size: 15px; margin: 0 0 8px; } h1 small, h2 small { font-weight: 400; color: var(--mute); font-size: 11px; margin-left: 4px; }
 h2 { font-size: 13px; margin: 0 0 8px; }
 details { border-top: 1px solid var(--line); margin: 6px 0 0; padding: 4px 0 0; }
-summary { color: var(--mute); font-size: 12px; font-weight: 600; cursor: pointer; padding: 4px 0; user-select: none; }
-summary .chg { float: right; font-weight: 400; color: var(--accent); }
+summary { color: var(--accent); font-size: 14px; font-weight: 700; cursor: pointer; padding: 6px 0 4px; user-select: none; }
+summary .chg { float: right; font-size: 11px; font-weight: 600; color: var(--sel); }
+.mod input[type=number], .mod select { color: var(--sel); border-color: var(--sel); font-weight: 600; }
+.mod input[type=range] { accent-color: var(--sel); }
 .search { position: sticky; top: -12px; z-index: 1; background: var(--card); margin: 0 -14px; padding: 8px 14px; }
 .search input { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; }
 .off { opacity: .45; }
