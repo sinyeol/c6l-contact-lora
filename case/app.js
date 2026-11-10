@@ -90,7 +90,10 @@ function buildControls() {
 const syncControls = (keys = Object.keys(P)) => { for (const k of keys) for (const el of $('controls').querySelectorAll(`[data-key="${k}"]`)) el.value = P[k]; refreshSide(); };
 
 // ---- 3D ----
-const LIFT = { Lid: 1, REF_C6L: 1, REF_buttonPCB: 1, Cover: -1, REF_battery: -1 };   // 분해 방향(C6L·PCB 는 뚜껑, 배터리는 바닥과 함께)
+// 분해 방향: 참고 부품은 자기를 잡는 부품과 함께 — C6L·PCB·안테나(C6L 에 조임)는 뚜껑, USB-C 는 세움이면 뚜껑·밑에서 꽂음이면 통,
+// 배터리는 누름 리브가 있으면 통(리브가 잡는다), 없으면 바닥
+const liftDir = P => { const L = layout(P), ribs = L.ribs.length && L.ZD0 - (P.JOINT === 1 ? 0 : L.ZS) > 3;
+  return { Lid: 1, REF_C6L: 1, REF_buttonPCB: 1, REF_antLoRa: 1, REF_antWiFi: 1, Cover: -1, REF_usbc: P.USB_MODE === 3 ? 1 : 0, REF_battery: ribs ? 0 : -1 }; };
 function createView(el) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -130,8 +133,8 @@ function createView(el) {
       groups[name] = g; scene.add(g);
     },
     prune(keep) { for (const n of Object.keys(groups)) if (!keep.includes(n)) { scene.remove(groups[n]); groups[n].traverse(o => o.geometry?.dispose()); delete groups[n]; } },
-    show(on, lift) {
-      for (const [n, g] of Object.entries(groups)) { g.visible = on(n); g.position.z = (LIFT[n] ?? 0) * lift; }
+    show(on, lift, dir) {
+      for (const [n, g] of Object.entries(groups)) { g.visible = on(n); g.position.z = (dir[n] ?? 0) * lift; }
       paint();
     },
     fit(L) {
@@ -143,7 +146,7 @@ function createView(el) {
 }
 let v3;
 const layerOn = n => n.startsWith('REF') ? $('ly-ref').checked : $('ly-' + n.toLowerCase()).checked;
-const show3d = () => { $('lift-n').textContent = $('lift').value; v3?.show(layerOn, +$('lift').value); };
+const show3d = () => { $('lift-n').textContent = $('lift').value; v3?.show(layerOn, +$('lift').value, liftDir(P)); };
 
 // ---- 2D ----
 function topSvg(L) {
