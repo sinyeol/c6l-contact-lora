@@ -160,7 +160,7 @@ function secSvg(L) {
   const W = P.WALL, [ox, , oz] = L.outer, pad = 10, top = L.IH + P.LID_T, fz = z => top - z, { IX, IH, ZS, ZD0, ZD1 } = L;
   const rect = (x0, z0, x1, z1, cls) => `<rect class="${cls}" x="${x0}" y="${fz(z1)}" width="${x1 - x0}" height="${z1 - z0}"/>`;
   let s = `<svg viewBox="${-W - pad - 6} ${-pad} ${ox + 2 * pad + 6} ${oz + 2 * pad}" role="img" aria-label="단면도">`;
-  // 끼움: 옆벽은 통이 바닥~윗면 전부, 뚜껑·바닥은 통 구멍에 끼우는 판(틈 FIT). 얹기: 높이 ZS·IH 로 나눔
+  // 끼움형: 옆벽은 통이 바닥~윗면 전부, 뚜껑·바닥은 통 구멍에 끼우는 판(틈 FIT). 적층형: 높이 ZS·IH 로 나눔
   const J = P.JOINT === 1, e0 = J ? P.FIT : -W, e1 = J ? IX - P.FIT : IX + W;
   s += J ? rect(e0, -P.FLOOR, e1, 0, 'cover') + rect(-W, -P.FLOOR, 0, top, 'wall') + rect(IX, -P.FLOOR, IX + W, top, 'wall')
     : rect(-W, -P.FLOOR, IX + W, 0, 'cover') + rect(-W, 0, 0, ZS, 'cover') + rect(IX, 0, IX + W, ZS, 'cover') + rect(-W, ZS, 0, IH, 'wall') + rect(IX, ZS, IX + W, IH, 'wall');
