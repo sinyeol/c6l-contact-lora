@@ -13,6 +13,7 @@ for (const [name, node] of Object.entries(m.bodies)) {
   const me = meshOf(node);
   assert.ok(me.volume > 1000 && me.volume < ox * oy * oz / 2, `${name} 부피 이상 ${me.volume}`);
   assert.ok(stl(me).byteLength === 84 + me.idx.length / 3 * 50);
+  assert.ok(me.genus >= 0, `${name} 가 여러 조각(genus ${me.genus}) — 맞닿은 면에서 떨어진 조각`);
   console.log(`${name}: ${(me.volume / 1000).toFixed(1)} cm³, 삼각형 ${me.idx.length / 3}, genus ${me.genus}`);
 }
 // 슬라이더 양 끝에서도 트리 계산이 죽지 않는지

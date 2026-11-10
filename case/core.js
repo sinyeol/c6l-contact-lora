@@ -31,7 +31,7 @@ export const DEFS = [
   ['배터리·바닥', 'BAT_GAP', '배터리 위 틈', 0, 5, 0.5, 'mm', 1],
   ['배터리·바닥', 'CABLE_BAY', '+X 쪽 케이블 자리', 0, 40, 0.5, 'mm', 16],
   ['배터리·바닥', 'EXTRA_Y', '안쪽 깊이 추가(Y, PCB 세로 배치용)', 0, 40, 0.5, 'mm', 0],
-  ['배터리·바닥', 'SEAM_H', '바닥 벽 높이 (0 = 평판, 최대 = 격판 밑까지)', 0, 40, 0.5, 'mm', 13],
+  ['배터리·바닥', 'SEAM_H', '바닥 벽 높이 (낮을수록 배터리를 통이 잡는다, 최대 = 격판 밑까지)', 0, 40, 0.5, 'mm', 4],
   ['배터리·바닥', 'COL_D', '모서리 기둥 지름', 7, 14, 0.5, 'mm', 9.5],
   ['배터리·바닥', 'MAG_D', '자석 지름', 3, 10, 0.5, 'mm', 6],
   ['배터리·바닥', 'MAG_T', '자석 두께', 1, 5, 0.5, 'mm', 3],
@@ -91,6 +91,9 @@ export function layout(P) {
   L.ZS = Math.min(Math.max(P.SEAM_H, 0), L.ZD0);        // 바닥-통 이음 높이
   const cr = P.COL_D / 2;
   L.cols = [[cr, cr], [IX - cr, cr], [IX - cr, IY - cr], [cr, IY - cr]];
+  // 배터리 +X 멈춤턱 2개(앞·뒤 벽 쪽, 가운데는 케이블 길), -X 는 모서리 기둥이 막는다
+  const sx = L.bat[2] + P.CLR, sl = Math.min(12, IY / 3);
+  L.stops = [[sx, -1, sx + 2, sl], [sx, IY - sl, sx + 2, IY + 1]];   // 벽 속으로 1mm 겹쳐 한 덩어리로
   // C6L: SMA 끝을 -X 벽에 붙인다(안테나를 조이면 벽을 사이에 두고 C6L 이 당겨져 고정), Y 는 드래그
   const cx0 = 0, cy = P.C6L_Y, cy0 = cy - C6L.W / 2, gx = cx0 + C6L.L;
   Object.assign(L, { c6l: [cx0, cy0, gx, cy0 + C6L.W], grove_x: gx,
@@ -147,6 +150,7 @@ export function check(P, L) {
     if (overlap(sq(p, P.C6L_PAD_D), r)) { warn('C6L 누름 받침이 격판 USB-C 자리와 겹침 — 그 받침은 빠진다'); break; }
   if (u.mode === 0) {
     for (const r of [c6lZone, L.pcb]) if (overlap(r, u.body)) warn('USB-C 커넥터 몸통이 C6L/PCB 밑에 있음 — 높이·배선 확인');
+    if (L.stops.some(r => overlap(r, u.flange))) warn('USB-C 커넥터 플랜지가 배터리 멈춤턱과 겹침 — 커넥터를 옮길 것');
     if (overlap(u.flange, L.bat)) err('USB-C 커넥터가 배터리 위에 있음 — 아래에서 케이블을 꽂을 자리가 없다. 케이블 자리(+X) 쪽으로');
   }
   if (u.mode === 2) {
@@ -183,7 +187,7 @@ export function check(P, L) {
   const a = W2 + P.COL_D / 2, R = P.R_OUT, flat = a < R ? (R - L.rT) - Math.hypot(R - a, R - a) : a - L.rT;
   if (flat < P.LID_CB_D / 2 + 0.2) warn('뚜껑 볼트 머리 자리가 둥근 테두리에 걸림 — 윗면 R 을 줄이거나 기둥을 키울 것');
   if (P.SEAM_H > L.ZD0) info(`바닥 벽 높이는 격판 밑(${L.ZD0}mm)까지만 — 그 값으로 맞춤`);
-  if (L.ZS < L.ZD0) info('통이 격판 밑으로 내려옴 — 격판을 출력할 때 서포트가 필요하다(바닥 벽 높이를 최대로 하면 통은 격판을 바닥에 두고 서포트 없이 출력)');
+  if (L.ZS < L.ZD0) info('통이 격판 밑으로 내려와 배터리를 벽·멈춤턱으로 잡는다 — 통은 격판이 공중에 뜨므로 배터리 칸에 서포트가 필요하다(바닥 벽 높이를 최대로 하면 서포트 없이 출력되지만 배터리는 바닥이 잡는다)');
   return W;
 }
 
@@ -225,7 +229,8 @@ export function model(P) {
   // 모서리 기둥: 원기둥을 벽 쪽으로 밀어 겹쳐 벽과 한 덩어리로, 안쪽 공간으로 잘라낸다
   const column = ([x, y], z0, z1) => {
     const dx = x < IX / 2 ? -cr : cr, dy = y < IY / 2 ? -cr : cr;
-    return and(add(...[[0, 0], [dx, 0], [0, dy], [dx, dy]].map(([ox, oy]) => vcyl([x + ox, y + oy], z0, z1, cr))), cav(z0, z1));
+    // 안쪽 공간보다 0.05 크게 잘라 벽과 살짝 겹친다 — 곡면이 딱 맞닿으면 부피 0 조각이 떨어져 나온다
+    return and(add(...[[0, 0], [dx, 0], [0, dy], [dx, dy]].map(([ox, oy]) => vcyl([x + ox, y + oy], z0, z1, cr))), rbox(-0.05, -0.05, z0, IX + 0.05, IY + 0.05, z1, ri + 0.05));
   };
   const magnet = (c, zFace, up) => vcyl(c, up ? zFace - 1 : zFace - P.MAG_T - 0.2, up ? zFace + P.MAG_T + 0.2 : zFace + 1, P.MAG_D / 2 + 0.1);
 
@@ -236,6 +241,7 @@ export function model(P) {
       cav(ZD0, ZD1),
       ...L.c6lPads.filter(p => !usbHoles.some(r => overlap(sq(p, P.C6L_PAD_D), r))).map(p => vcyl(p, ZD1 - 0.1, IH - C6L.T + P.C6L_PRESS, P.C6L_PAD_D / 2)),
       ...L.cols.map(c => column(c, ZS, IH)),
+      ...(ZS < ZD0 ? L.stops.map(r => rect(r, ZS, ZD0 + 0.5)) : []),
       ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : [])),
     ...L.cols.map(c => vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2)),
     ...L.cols.map(c => magnet(c, ZS, true)),
@@ -246,12 +252,14 @@ export function model(P) {
     ...(u.mode === 0 ? [rect(u.slot, ZD0 - 1, ZD1 + 1), ...u.holes.map(h => vcyl(h, ZD0 - 1, ZD0 + P.INS2_L + 0.3, P.INS2_HOLE / 2))] : []),
     ...(u.mode === 2 ? [stadium(u.cable, ZD0 - 1, ZD1 + 1)] : []));
 
-  // Cover: 바닥판(+벽 ZS 높이) + 기둥 자석 자리 + 앞쪽 손가락 홈(바깥에서만, 안쪽 0.8 남김)
-  const notch = cyl([IX / 2, -W - 1, ZS], [IX / 2, -0.8, ZS], P.NOTCH_R);
+  // Cover: 바닥판(+벽 ZS 높이) + 기둥 자석 자리. 앞쪽 손가락 홈(바깥에서만, 안쪽 0.8 남김)은 이음선의 높은 쪽 부품에 판다
+  // — 바닥이 낮으면 통에 파서 바닥 벽 윗모서리를 손끝으로 당긴다
+  const notch = cyl([IX / 2, -W - 1, ZS], [IX / 2, -0.8, ZS], P.NOTCH_R), notchInBody = ZS + P.FLOOR < ZD0 - ZS;
+  if (notchInBody) body.c.push(notch);
   const cover = ZS > 0.5
-    ? sub(add(sub(slab(-P.FLOOR - 1, ZS), cav(0, ZS + 1)), ...L.cols.map(c => column(c, 0, ZS))),
-      ...L.cols.map(c => magnet(c, ZS, false)), notch)
-    : sub(slab(-P.FLOOR - 1, ZS), ...L.cols.map(c => magnet(c, ZS, false)), notch);
+    ? sub(add(sub(slab(-P.FLOOR - 1, ZS), cav(0, ZS + 1)), ...L.cols.map(c => column(c, -0.5, ZS)), ...L.stops.map(r => rect(r, -0.5, ZS))),
+      ...L.cols.map(c => magnet(c, ZS, false)), ...(notchInBody ? [] : [notch]))
+    : sub(slab(-P.FLOOR - 1, ZS), ...L.cols.map(c => magnet(c, ZS, false)), ...(notchInBody ? [] : [notch]));
 
   // Lid: 조립 위치(z=IH 위). 출력은 뒤집어서
   const g = L.PCB_GAP, pin = P.PIN_D / 2;
