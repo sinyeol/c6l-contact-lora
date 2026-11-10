@@ -160,14 +160,16 @@ function secSvg(L) {
   const W = P.WALL, [ox, , oz] = L.outer, pad = 10, top = L.IH + P.LID_T, fz = z => top - z, { IX, IH, ZS, ZD0, ZD1 } = L;
   const rect = (x0, z0, x1, z1, cls) => `<rect class="${cls}" x="${x0}" y="${fz(z1)}" width="${x1 - x0}" height="${z1 - z0}"/>`;
   let s = `<svg viewBox="${-W - pad - 6} ${-pad} ${ox + 2 * pad + 6} ${oz + 2 * pad}" role="img" aria-label="단면도">`;
-  // 옆벽은 통이 바닥~윗면 전부, 뚜껑·바닥은 통 구멍에 끼우는 판(틈 FIT)
-  s += rect(P.FIT, -P.FLOOR, IX - P.FIT, 0, 'cover');
-  s += rect(-W, -P.FLOOR, 0, top, 'wall') + rect(IX, -P.FLOOR, IX + W, top, 'wall') + rect(0, ZD0, IX, ZD1, 'wall');
+  // 끼움: 옆벽은 통이 바닥~윗면 전부, 뚜껑·바닥은 통 구멍에 끼우는 판(틈 FIT). 얹기: 높이 ZS·IH 로 나눔
+  const J = P.JOINT === 1, e0 = J ? P.FIT : -W, e1 = J ? IX - P.FIT : IX + W;
+  s += J ? rect(e0, -P.FLOOR, e1, 0, 'cover') + rect(-W, -P.FLOOR, 0, top, 'wall') + rect(IX, -P.FLOOR, IX + W, top, 'wall')
+    : rect(-W, -P.FLOOR, IX + W, 0, 'cover') + rect(-W, 0, 0, ZS, 'cover') + rect(IX, 0, IX + W, ZS, 'cover') + rect(-W, ZS, 0, IH, 'wall') + rect(IX, ZS, IX + W, IH, 'wall');
+  s += rect(0, ZD0, IX, ZD1, 'wall');
   for (const [x] of [L.cols[0], L.cols[1]]) s += rect(x - P.COL_D / 2, 0, x + P.COL_D / 2, ZS, 'cover') + rect(x - P.COL_D / 2, ZS, x + P.COL_D / 2, IH, 'boss')
     + rect(x - P.MAG_D / 2, ZS - P.MAG_T, x + P.MAG_D / 2, ZS + P.MAG_T, 'mag') + rect(x - P.INS3_HOLE / 2, IH - P.INS3_L, x + P.INS3_HOLE / 2, IH, 'mag');
   // 뚜껑: OLED 자리는 MASK_T 로 얇게
   const [mx] = L.oled, wx = P.OLED_WX / 2, o = L.maskOff;
-  s += `<path class="lidp" d="M${P.FIT},${fz(IH)} H${mx - wx} V${fz(IH + P.MASK_T)} L${mx - wx - o},${fz(top)} H${P.FIT} Z M${mx + wx},${fz(IH)} H${IX - P.FIT} V${fz(top)} H${mx + wx + o} L${mx + wx},${fz(IH + P.MASK_T)} Z"/>`;
+  s += `<path class="lidp" d="M${e0},${fz(IH)} H${mx - wx} V${fz(IH + P.MASK_T)} L${mx - wx - o},${fz(top)} H${e0} Z M${mx + wx},${fz(IH)} H${e1} V${fz(top)} H${mx + wx + o} L${mx + wx},${fz(IH + P.MASK_T)} Z"/>`;
   s += rect(L.bat[0], 0, L.bat[2], P.BAT_T, 'part bat');
   const c = L.c6l, p = L.pcb, pz = IH - L.PCB_GAP - PCB.T, u = L.usbc;
   for (const [x] of L.c6lPads) s += rect(x - P.C6L_PAD_D / 2, ZD1, x + P.C6L_PAD_D / 2, IH - C6L.T + P.C6L_PRESS, 'boss');
