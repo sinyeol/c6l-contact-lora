@@ -164,7 +164,7 @@ function topSvg(L) {
     const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2, st = u.stand;
     s += `<g data-drag="usbc">${rect(r, 'part usb', `rx="${rr2}"`)}${lbl(u.c[0], r[1] - 3.5, '케이블 구멍')}</g>`
       + `<g data-drag="usbw">${[st.bracket, ...st.ribs].map(b => rect(b, 'boss')).join('')}${rect(st.flange, 'part usb')}`
-      + lbl((st.foot[0] + st.foot[2]) / 2, st.foot[3] + 1.5, 'USB-C(세움)') + '</g>';
+      + lbl((st.foot[0] + st.foot[2]) / 2, st.foot[3] + 1.5, 'USB-C(뚜껑 밑)') + '</g>';
   }
   if (u.mode === 2) {
     const r = u.cable, rr2 = Math.min(r[2] - r[0], r[3] - r[1]) / 2;
@@ -221,7 +221,7 @@ function secSvg(L) {
   if (u.mode === 0) s += rect(u.flange[0], ZD0 - USBC.FT, u.flange[2], ZD0, 'part usb') + rect(u.body[0], ZD0, u.body[2], ZD0 - USBC.FT + USBC.BODY_L, 'part usb');
   if (u.mode >= 2) s += rect(u.cable[0], ZD0, u.cable[2], ZD1, 'cut');
   if (u.mode === 3) { const st = u.stand;
-    s += rect(st.foot[0], ZD1, st.foot[2], st.zTop, 'boss') + rect(st.flange[0], ZD1, st.flange[2], ZD1 + USBC.FH, 'part usb'); }
+    s += rect(st.foot[0], st.z0, st.foot[2], IH, 'boss') + rect(st.flange[0], st.zc - USBC.FH / 2, st.flange[2], st.zc + USBC.FH / 2, 'part usb'); }
   s += `<g class="dim"><line x1="${-W - 5}" y1="${fz(-P.FLOOR)}" x2="${-W - 5}" y2="${fz(top)}"/><text x="${-W - 7}" y="${fz(oz / 2 - P.FLOOR)}" style="font-size:3.6px" transform="rotate(-90 ${-W - 7} ${fz(oz / 2 - P.FLOOR)})">${n1(oz)} mm</text></g>`;
   return s + '</svg>';
 }
@@ -240,7 +240,7 @@ function tables(m, meshes) {
   $('t-parts').innerHTML = '<table><tr><th>자리</th><th>부품</th><th class="n">수량</th></tr>'
     + row('뚜껑 ↔ 통 (모서리 기둥 위)', `${ins(3, P.INS3_L, P.INS3_HOLE)} + M3×${L.bolts.lid} 소켓 볼트`, 4)
     + row('버튼 PCB ↔ 뚜껑 기둥', `${ins(3, P.INS3S_L, P.INS3_HOLE)} + M3×${L.bolts.pcb} 볼트`, 4)
-    + (L.usbc.mode === 3 ? row('USB-C 커넥터 ↔ 격판 위 받침벽(옆으로)', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
+    + (L.usbc.mode === 3 ? row('USB-C 커넥터 ↔ 뚜껑 밑 받침벽(옆으로)', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + (L.usbc.mode === 0 ? row('USB-C 커넥터 ↔ 격판 밑', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + row('바닥 ↔ 통 (기둥 아래)', `네오디뮴 자석 Ø${n1(P.MAG_D)}×${n1(P.MAG_T)} <small>(통·바닥 각 4, 극 맞춰 순간접착)</small>`, 8)
     + row('C6L ↔ 뚜껑', '레고 핀(뚜껑에 일체) — 볼트 없음', 2)
