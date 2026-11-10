@@ -14,6 +14,7 @@ export const PCB = { L: 66.04, W: 22.352, T: 1.6, HX: (66.04 - 59.944) / 2, HY: 
 // 패널형 USB-C (JRC-C009, 사진 치수: 플랜지 20×7, 몸통 폭 9). 구멍 간격·두께는 사진 비례 추정
 export const USBC = { FL: 20, FH: 7, FT: 1, HOLE_P: 16.5, BODY_L: 5.3, BODY_W: 9, BODY_T: 3.6 };
 export const M3_CLEAR = 3.4;
+const RIB_R = 1.5;   // 배터리 누름 리브 끝 반지름
 
 // [그룹, 키, 라벨, min, max, step, 단위, 기본값, (선택지 [[값, 라벨]…] — 있으면 셀렉트)]
 export const DEFS = [
@@ -32,6 +33,7 @@ export const DEFS = [
   ['배터리·바닥', 'CABLE_BAY', '+X 쪽 케이블 자리', 0, 40, 0.5, 'mm', 16],
   ['배터리·바닥', 'EXTRA_Y', '안쪽 깊이 추가(Y, PCB 세로 배치용)', 0, 40, 0.5, 'mm', 0],
   ['배터리·바닥', 'SEAM_H', '바닥 벽 높이 (낮을수록 배터리를 통이 잡는다, 최대 = 격판 밑까지)', 0, 40, 0.5, 'mm', 4],
+  ['배터리·바닥', 'RIB_PRESS', '배터리 누름 리브 조임 (0 = 없음)', 0, 1, 0.05, 'mm', 0.3],
   ['배터리·바닥', 'COL_D', '모서리 기둥 지름', 7, 14, 0.5, 'mm', 9.5],
   ['배터리·바닥', 'MAG_D', '자석 지름', 3, 10, 0.5, 'mm', 6],
   ['배터리·바닥', 'MAG_T', '자석 두께', 1, 5, 0.5, 'mm', 3],
@@ -94,6 +96,10 @@ export function layout(P) {
   // 배터리 +X 멈춤턱 2개(앞·뒤 벽 쪽, 가운데는 케이블 길), -X 는 모서리 기둥이 막는다
   const sx = L.bat[2] + P.CLR, sl = Math.min(12, IY / 3);
   L.stops = [[sx, -1, sx + 2, sl], [sx, IY - sl, sx + 2, IY + 1]];   // 벽 속으로 1mm 겹쳐 한 덩어리로
+  // 배터리 누름 리브(앞·뒤 벽 각 2개): 끝이 배터리 면을 RIB_PRESS 만큼 파고드는 세로 기둥 중심 [x, y, 벽 y]
+  L.ribs = P.RIB_PRESS > 0 ? [0.25, 0.75].flatMap(f => [
+    [L.bat[0] + P.BAT_L * f, L.bat[1] + P.RIB_PRESS - RIB_R, -1],
+    [L.bat[0] + P.BAT_L * f, L.bat[3] - P.RIB_PRESS + RIB_R, IY + 1]]) : [];
   // C6L: SMA 끝을 -X 벽에 붙인다(안테나를 조이면 벽을 사이에 두고 C6L 이 당겨져 고정), Y 는 드래그
   const cx0 = 0, cy = P.C6L_Y, cy0 = cy - C6L.W / 2, gx = cx0 + C6L.L;
   Object.assign(L, { c6l: [cx0, cy0, gx, cy0 + C6L.W], grove_x: gx,
@@ -186,6 +192,7 @@ export function check(P, L) {
   // 뚜껑 볼트 머리 자리가 윗면 평평한 곳에 있는지(바깥 모서리 기준 거리 a,b)
   const a = W2 + P.COL_D / 2, R = P.R_OUT, flat = a < R ? (R - L.rT) - Math.hypot(R - a, R - a) : a - L.rT;
   if (flat < P.LID_CB_D / 2 + 0.2) warn('뚜껑 볼트 머리 자리가 둥근 테두리에 걸림 — 윗면 R 을 줄이거나 기둥을 키울 것');
+  if (L.ribs.length && L.ZD0 - L.ZS <= 3) info('바닥 벽이 높아 통에 배터리 누름 리브 자리가 없음 — 리브를 넣으려면 바닥 벽 높이를 낮출 것');
   if (P.SEAM_H > L.ZD0) info(`바닥 벽 높이는 격판 밑(${L.ZD0}mm)까지만 — 그 값으로 맞춤`);
   if (L.ZS < L.ZD0) info('통이 격판 밑으로 내려와 배터리를 벽·멈춤턱으로 잡는다 — 통은 격판이 공중에 뜨므로 배터리 칸에 서포트가 필요하다(바닥 벽 높이를 최대로 하면 서포트 없이 출력되지만 배터리는 바닥이 잡는다)');
   return W;
@@ -242,6 +249,10 @@ export function model(P) {
       ...L.c6lPads.filter(p => !usbHoles.some(r => overlap(sq(p, P.C6L_PAD_D), r))).map(p => vcyl(p, ZD1 - 0.1, IH - C6L.T + P.C6L_PRESS, P.C6L_PAD_D / 2)),
       ...L.cols.map(c => column(c, ZS, IH)),
       ...(ZS < ZD0 ? L.stops.map(r => rect(r, ZS, ZD0 + 0.5)) : []),
+      // 누름 리브: 아래 2mm 는 가늘게(조임 0) 시작해 배터리가 걸리지 않고 들어간다. 벽까지 판으로 이어 한 덩어리로
+      ...(ZD0 - ZS > 3 ? L.ribs.flatMap(([x, y, wy]) => [
+        cyl([x, y, ZS], [x, y, ZS + 2], RIB_R - P.RIB_PRESS, RIB_R), vcyl([x, y], ZS + 2, ZD0 + 0.5, RIB_R),
+        box(x - RIB_R, Math.min(y, wy), ZS, x + RIB_R, Math.max(y, wy), ZD0 + 0.5)]) : []),
       ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : [])),
     ...L.cols.map(c => vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2)),
     ...L.cols.map(c => magnet(c, ZS, true)),

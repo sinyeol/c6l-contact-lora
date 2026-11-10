@@ -123,6 +123,7 @@ function topSvg(L) {
   s += rect(L.bat, 'part bat') + lbl((L.bat[0] + L.bat[2]) / 2, L.bat[1] + 3, '배터리(격판 밑)');
   for (const cc of L.cols) s += circ(cc, P.COL_D, 'boss') + circ(cc, P.MAG_D, 'mag');
   for (const r of L.stops) s += rect(r, 'boss');
+  for (const [x, y] of L.ribs) s += circ([x, y], 3, 'boss');
   for (const p of L.c6lPads) s += circ(p, P.C6L_PAD_D, 'boss');       // 격판 누름 받침(C6L 밑)
   if (u.mode === 0) s += `<g data-drag="usbc">${rect(u.flange, 'part usb')}${rect(u.slot, 'cut')}${u.holes.map(h => circ(h, 1.8, 'boss')).join('')}${lbl(u.c[0], u.flange[1] - 3.5, 'USB-C')}</g>`;
   if (u.mode === 2) {
