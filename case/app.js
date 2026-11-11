@@ -186,7 +186,7 @@ function topSvg(L) {
   s += circ(L.ubtn, P.UBTN_D, 'cut');
   for (const k of L.keys) s += circ(k, P.BTN_HOLE_D, 'cut');
   if (P.COVER_FIX !== 1) for (const b of L.cols) s += circ(b, P.LID_CB_D, 'cut');
-  for (const p of L.pins) s += circ(p, P.PIN_D, 'cut');
+  for (const p of L.pins) s += circ(p, P.PIN_D, 'cut') + (P.PIN_TAP ? circ(p, P.PIN_TAP, 'mag') : '');
   for (const [sy] of L.sma) s += rect([-W, sy - P.ANT_D / 2, -P.SMA_WALL, sy + P.ANT_D / 2], 'cut');
   const pl = L.pull, a0 = Math.atan2(pl.v[1], pl.v[0]), moon = Array.from({ length: 19 }, (_, i) => a0 - Math.PI / 2 + i * Math.PI / 18)
     .map(t => `${pl.c[0] + pl.r * Math.cos(t)},${fy(pl.c[1] + pl.r * Math.sin(t))}`).join(' ');
@@ -257,7 +257,8 @@ function tables(m, meshes) {
     + (L.usbc.mode === 3 ? row('USB-C 커넥터 ↔ 뚜껑 밑 받침벽(옆으로)', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + (L.usbc.mode === 0 ? row('USB-C 커넥터 ↔ 격판 밑', `${ins(2, P.INS2_L, P.INS2_HOLE)} + M2×${L.bolts.usbc} 볼트`, 2) : '')
     + (P.COVER_FIX === 1 ? '' : row('바닥 ↔ 통 (기둥 아래)', `네오디뮴 자석 Ø${n1(P.MAG_D)}×${n1(P.MAG_T)} <small>(통·바닥 각 4, 극 맞춰 순간접착)</small>`, 8))
-    + row('C6L ↔ 뚜껑', '레고 핀(뚜껑에 일체) — 볼트 없음', 2)
+    + (P.PIN_TAP ? row('C6L ↔ 뚜껑 레고 핀(밑에서 레고 구멍으로)', `${P.PIN_TAP >= 2.4 ? 'M3' : P.PIN_TAP >= 2 ? 'M2.5' : 'M2'}×${L.bolts.c6l} 볼트 + 와셔 <small>(핀 탭 구멍 Ø${n1(P.PIN_TAP)}에 셀프탭)</small>`, 2)
+      : row('C6L ↔ 뚜껑', '레고 핀(뚜껑에 일체) — 볼트 없음', 2))
     + '</table>';
   $('t-warn').innerHTML = m.warn.length ? `<table><tr><th>수준</th><th>내용</th></tr>${m.warn.map(([lv, t]) => `<tr class="w-${lv}"><td class="lv ${lv}">${lv}</td><td>${esc(t)}</td></tr>`).join('')}</table>`
     : '<div class="empty lv ok">문제 없음</div>';

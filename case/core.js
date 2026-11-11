@@ -17,6 +17,7 @@ const USBW_RIB = 6, USBW_RIB_T = 3;   // 세운 받침벽 뒷면 양끝 리브(�
 export const M3_CLEAR = 3.4;
 const RIB_R = 1.5;   // 배터리 누름 리브 끝 반지름
 const SHELF_SH = 1.2;   // 격판 받침 턱: 통 기둥이 격판 위에서 이만큼 가늘어진다
+const C6L_HEAD_D = 8;   // C6L 고정 볼트 머리·와셔(M3 Ø7) 자리 — 격판에 뚫는 구멍 지름
 const ANT_HUB = 12;  // 휩 안테나 나사·꺾임 마디 길이(사진 비례)
 
 // [그룹, 키, 라벨, min, max, step, 단위, 기본값, (선택지 [[값, 라벨]…] — 있으면 셀렉트)]
@@ -64,6 +65,7 @@ export const DEFS = [
   ['C6L', 'ANT_FOLD', '안테나 꺾음', 0, 90, 45, '', 90, [[90, '90° 위로 세움'], [45, '45° 위로'], [0, '곧게 옆으로']]],
   ['C6L', 'PIN_D', '레고 핀 지름(구멍 Ø5, 출력 공차에 맞춰)', 4.4, 5.2, 0.05, 'mm', 4.9],
   ['C6L', 'PIN_LEN', '레고 핀 길이', 2, 8, 0.5, 'mm', 6],
+  ['C6L', 'PIN_TAP', '레고 핀 탭 구멍 (C6L 밑에서 레고 구멍으로 볼트, 셀프탭: M3 2.5 · M2.5 2.1, 0 = 없음)', 0, 3, 0.05, 'mm', 2.5],
   ['C6L', 'GROVE_CLR', 'Grove 플러그 자리', 0, 25, 1, 'mm', 10],
   ['C6L', 'C6L_PRESS', '누름 받침 눌림량(뚜껑 닫으면 C6L 을 누름)', 0, 1.5, 0.05, 'mm', 0.3],
   ['C6L', 'C6L_PAD_D', '누름 받침 지름', 3, 10, 0.5, 'mm', 6],
@@ -185,7 +187,7 @@ export function layout(P) {
   // 바닥 볼트 고정: 뚜껑 밑에 기둥(lidBoss)을 내려 인서트를 박고(윗면 1mm 남김), 통 기둥은 그만큼 낮춘다. 볼트는 바닥 밑 머리 자리에서 관통
   L.lidBoss = P.COVER_FIX === 1 ? Math.max(P.INS3_L + 1.5 - P.LID_T, 1) : 0;
   L.coverBoltN = L.IH - L.lidBoss + P.INS3_L - 0.5 - (-P.FLOOR + P.LID_CB_H);   // 머리 자리 바닥 ~ 인서트 끝 0.5 전
-  L.bolts = { cover: std(L.coverBoltN), lid: std(P.LID_T - P.LID_CB_H + P.INS3_L - 0.5), pcb: std(PCB.T + P.INS3S_L - 0.5), usbc: std(USBC.FT + P.INS2_L - 0.3) };
+  L.bolts = { cover: std(L.coverBoltN), lid: std(P.LID_T - P.LID_CB_H + P.INS3_L - 0.5), pcb: std(PCB.T + P.INS3S_L - 0.5), c6l: std(0.5 + C6L.T + P.LID_T - 1 - 0.5), usbc: std(USBC.FT + P.INS2_L - 0.3) };
   return L;
 }
 
@@ -270,6 +272,10 @@ export function check(P, L) {
   if (L.PCB_GAP + P.LID_T - 0.8 < P.INS3S_L + 0.5) err('PCB 기둥+뚜껑이 짧은 M3 인서트보다 짧음 — 인서트 길이·스위치 높이 확인');
   if (P.STANDOFF_D < P.INS3_HOLE + 2.4) warn('PCB 기둥 벽이 1.2mm 미만');
   if (P.PIN_LEN > C6L.T) warn('레고 핀이 C6L 두께(8mm)보다 김');
+  if (P.PIN_TAP) {
+    if (P.PIN_D - 1 - P.PIN_TAP < 1.2) err(`레고 핀 탭 구멍 벽이 ${((P.PIN_D - P.PIN_TAP) / 2).toFixed(2)}mm — 끝 모따기에서 0.6mm 미만, 탭 구멍을 줄일 것`);
+    if (L.IH - C6L.T - L.ZD0 < 2.85) warn(`C6L 밑 ~ 격판 밑 ${(L.IH - C6L.T - L.ZD0).toFixed(1)}mm — 볼트 머리·와셔(약 2.9)가 배터리에 닿을 수 있음`);
+  }
   info('ST003 모듈: 사진상 헤더 핀·POWER LED 가 위로 솟아 있어 뚜껑에 닿는다 — 핀을 빼고 선을 직접 납땜, LED 는 눕힐 것');
   info('ST003 모듈: 사진상 둥근 캡(약 Ø11.5)이 끼워져 있다 — 캡을 쓰면 버튼 구멍 Ø12.5, 스위치 높이는 PCB~캡 끝 실측값으로');
   if (P.JOINT === 1) {
@@ -389,7 +395,8 @@ export function model(P) {
       ...(u.mode === 0 ? u.holes.map(h => vcyl(h, ZD1 - 0.1, ZD0 + P.INS2_L + 1.2, P.INS2_HOLE / 2 + 1.6)) : [])),
     ...L.cols.map(c => B ? vcyl(c, ZD0 - 1, colTop + 1, M3_CLEAR / 2) : column(c, ZD0 - 1, ZD1 + 1, undefined, cr - SHELF_SH + P.FIT)),
     ...(u.mode === 0 ? [rect(u.slot, ZD0 - 1, ZD1 + 1), ...u.holes.map(h => vcyl(h, ZD0 - 1, ZD0 + P.INS2_L + 0.3, P.INS2_HOLE / 2))] : []),
-    ...(u.mode >= 2 ? [stadium(u.cable, ZD0 - 1, ZD1 + 1)] : []));
+    ...(u.mode >= 2 ? [stadium(u.cable, ZD0 - 1, ZD1 + 1)] : []),
+    ...(P.PIN_TAP ? L.pins.map(p => vcyl(p, ZD0 - 1, ZD1 + 1, C6L_HEAD_D / 2)) : []));   // C6L 밑 볼트 머리 자리(C6L 밑 틈이 1mm 뿐이라 격판을 뚫는다)
 
   let cover;
   if (J) {
@@ -422,6 +429,7 @@ export function model(P) {
       ...(u.mode === 3 ? [and(add(...[st.bracket, ...st.ribs].map(r => rect(r, st.z0, IH + 0.5))), plug(st.z0 - 1, IH + 0.5))] : []),
       ...(B ? L.cols.map(c => column(c, colTop, IH + 0.5, plug(colTop - 1, IH + 0.5))) : [])),   // 세운 USB-C 받침벽(뚜껑 밑), 볼트 고정: 뚜껑 밑 인서트 기둥
     ...L.stand.map(s => vcyl(s, IH - g - 1, IH - g + P.INS3S_L + 0.5, P.INS3_HOLE / 2)),
+    ...(P.PIN_TAP ? L.pins.map(p => vcyl(p, IH - P.PIN_LEN - 1, top - 1, P.PIN_TAP / 2)) : []),   // 레고 핀 탭: 윗면 1mm 남김
     box(L.oled[0] - P.OLED_WX / 2, L.oled[1] - P.OLED_WY / 2, IH - 1, L.oled[0] + P.OLED_WX / 2, L.oled[1] + P.OLED_WY / 2, top + 1),
     // OLED 마스크: 창 둘레는 MASK_T, 바깥으로 경사져 올라가 뚜껑 두께로
     ...(P.MASK_T < P.LID_T ? [{ t: 'frustum', c: L.oled, z0: IH + P.MASK_T, z1: top + 0.5, w0: [P.OLED_WX, P.OLED_WY],
