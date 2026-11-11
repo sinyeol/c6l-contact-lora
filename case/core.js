@@ -123,9 +123,6 @@ export function layout(P) {
   L.zCone = L.ZS - P.COL_D / 2 * Math.SQRT2;            // 끼움형 통 기둥 밑 45° 원뿔 꼭짓점(안쪽 모서리) — 기둥 중심에서 바닥 기둥과 닿는 높이가 ZS
   const cr = P.COL_D / 2;
   L.cols = [[cr, cr], [IX - cr, cr], [IX - cr, IY - cr], [cr, IY - cr]];
-  // 배터리 +X 멈춤턱 2개(앞·뒤 벽 쪽, 가운데는 케이블 길), -X 는 모서리 기둥이 막는다
-  const sx = L.bat[2] + P.CLR, sl = Math.min(12, IY / 3);
-  L.stops = [[sx, -1, sx + 2, sl], [sx, IY - sl, sx + 2, IY + 1]];   // 벽 속으로 1mm 겹쳐 한 덩어리로
   // 배터리 누름 리브(앞·뒤 벽 각 2개): 끝이 배터리 면을 RIB_PRESS 만큼 파고드는 세로 기둥 중심 [x, y, 벽 y]
   L.ribs = P.RIB_PRESS > 0 ? [0.25, 0.75].flatMap(f => [
     [L.bat[0] + P.BAT_L * f, L.bat[1] + P.RIB_PRESS - RIB_R, -1],
@@ -214,7 +211,6 @@ export function check(P, L) {
     if (overlap(sq(p, P.C6L_PAD_D), r)) { warn('C6L 누름 받침이 격판 USB-C 자리와 겹침 — 그 받침은 빠진다'); break; }
   if (u.mode === 0) {
     for (const r of [c6lZone, L.pcb]) if (overlap(r, u.body)) warn('USB-C 커넥터 몸통이 C6L/PCB 밑에 있음 — 높이·배선 확인');
-    if (L.stops.some(r => overlap(r, u.flange))) warn('USB-C 커넥터 플랜지가 배터리 멈춤턱과 겹침 — 커넥터를 옮길 것');
     if (overlap(u.flange, L.bat)) err('USB-C 커넥터가 배터리 위에 있음 — 아래에서 케이블을 꽂을 자리가 없다. 케이블 자리(+X) 쪽으로');
   }
   if (u.mode === 2) {
@@ -228,7 +224,6 @@ export function check(P, L) {
     if (foot.some(r => overlap(r, c6lZone) || overlap(r, L.pcb) || L.stand.some(s => overlap(sq(s, P.STANDOFF_D), r))))
       err('세운 USB-C 받침벽이 C6L/버튼 PCB 와 겹침 — 받침벽 위치(드래그)를 바꿀 것');
     if (overlap(u.cable, L.bat)) warn('케이블 구멍이 배터리 위에 있음 — 배터리 위 틈으로 케이블이 지나가야 한다. 케이블 자리(+X) 쪽으로');
-    if (L.stops.some(r => overlap(r, u.cable))) warn('케이블 구멍이 배터리 멈춤턱과 겹침');
     const c = u.c, ahead = (c[0] - st.f[0]) * st.d[0] + (c[1] - st.f[1]) * st.d[1], side = Math.abs((c[0] - st.f[0]) * st.d[1] - (c[1] - st.f[1]) * st.d[0]);
     if (ahead < (P.USBC_ROT ? P.CBL_W : P.CBL_L) / 2 + 10) warn(`케이블 구멍이 커넥터 면에서 ${ahead.toFixed(1)}mm — 플러그(약 15~20)가 누울 자리가 부족할 수 있다`);
     if (side > USBC.FL / 2) warn(`케이블 구멍이 커넥터 정면에서 옆으로 ${side.toFixed(1)}mm 벗어남`);
@@ -303,7 +298,7 @@ export function check(P, L) {
     else if (L.ZD0 - L.zCone < P.COL_D / 2 * (Math.SQRT2 + 1)) warn('격판 받침 턱 일부가 통 기둥 밑 경사에 걸림 — 바닥 높이를 낮추거나 배터리 칸을 높일 것');
   }
   if (P.COVER_FIX !== 1 && P.COL_D / 2 - SHELF_SH - P.INS3_HOLE / 2 < 1.2) err('격판 위 통 기둥(받침 턱만큼 가늘어짐)의 인서트 벽이 1.2mm 보다 얇음 — 모서리 기둥 지름을 키울 것');
-  info(`격판은 따로 출력(판을 아래로) — ${P.COVER_FIX === 1 ? '통 기둥 윗면' : '통 기둥 턱'}·멈춤턱${L.ribs.length ? '·누름 리브' : ''} 위에 얹고 ${P.COVER_FIX === 1 ? '귀퉁이 기둥을 관통하는 바닥 볼트로 조인다' : '뚜껑을 닫으면 C6L 누름 받침으로 눌린다'}. 통·뚜껑(뒤집어)·바닥·격판 모두 서포트 없이`);
+  info(`격판은 따로 출력(판을 아래로) — ${P.COVER_FIX === 1 ? '통 기둥 윗면' : '통 기둥 턱'}${L.ribs.length ? '·누름 리브' : ''} 위에 얹고 ${P.COVER_FIX === 1 ? '귀퉁이 기둥을 관통하는 바닥 볼트로 조인다' : '뚜껑을 닫으면 C6L 누름 받침으로 눌린다'}. 통·뚜껑(뒤집어)·바닥·격판 모두 서포트 없이`);
   if (P.JOINT !== 1 && L.ribs.length && L.ZD0 - L.ZS <= 3) info('바닥 벽이 높아 통에 배터리 누름 리브 자리가 없음 — 리브를 넣으려면 바닥 높이를 낮출 것');
   return W;
 }
@@ -370,16 +365,13 @@ export function model(P) {
   const B = P.COVER_FIX === 1, colTop = IH - L.lidBoss;
   const coverFix = c => B ? [vcyl(c, -P.FLOOR - 1, ZS + 2, M3_CLEAR / 2), vcyl(c, -P.FLOOR - 1, -P.FLOOR + P.LID_CB_H, P.LID_CB_D / 2)] : [J ? tiltMag(c, false) : magnet(c, ZS, false)];
 
-  // Body: 벽(끼움형: 바닥~윗면, 적층형: ZS~IH) + 기둥(위 = M3 인서트·뚜껑 받침, 아래 = 자석, 격판 높이에서 SHELF_SH 만큼 가늘어져 격판 받침 턱) + 멈춤턱·누름 리브
+  // Body: 벽(끼움형: 바닥~윗면, 적층형: ZS~IH) + 기둥(위 = M3 인서트·뚜껑 받침, 아래 = 자석, 격판 높이에서 SHELF_SH 만큼 가늘어져 격판 받침 턱) + 누름 리브
   const u = L.usbc, st = u.stand, usbHoles = u.mode === 0 ? [u.flange] : u.mode === 2 ? [u.cable] : u.mode === 3 ? [u.cable, st.foot] : [];
   const smaRecess = ([sy, sz]) => cyl([-W - 1, sy, sz], [-P.SMA_WALL, sy, sz], P.ANT_D / 2);
   const body = sub(
     add(J ? sub(slab(-P.FLOOR - 1, top + 1), cav(-0.5, IH + 0.5), hole(-P.FLOOR - 2, 0), hole(IH, top + 2)) : sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
       ...L.cols.flatMap(c => [...(ZS < ZD0 ? J ? [and(column(c, L.zCone, ZD0), cone(c, L.zCone, ZD0 + 1)), sub(column(c, 0, ZD0), inset(SEAT_W, -1, ZD0 + 1))] : [column(c, ZS, ZD0)] : []),
         ...(B ? [] : [column(c, Math.max(ZD0 - 0.2, ZS), colTop, undefined, cr - SHELF_SH)])]),
-      // 멈춤턱: 끼움형은 밑이 떠 있어 벽 쪽 끝에 꼭짓점을 둔 45° 원뿔 안만 남긴다(벽에서 비스듬히 자라 격판 높이에서 다 찬다)
-      ...(zb < ZD0 ? L.stops.map(r => { const ax = [(r[0] + r[2]) / 2, r[1] < 0 ? 0 : IY];
-        return J ? and(rect(r, zb, ZD0), cyl([ax[0], ax[1], zb + 0.05], [ax[0], ax[1], ZD0 + 1], 0.05, ZD0 + 1 - zb)) : rect(r, zb, ZD0); }) : []),
       // 누름 리브: 아래 2mm 는 가늘게(조임 0) 시작해 배터리가 걸리지 않고 들어간다. 벽까지 판으로 이어 한 덩어리로
       ...(ZD0 - zb > 3 ? L.ribs.flatMap(([x, y, wy]) => [
         cyl([x, y, zb], [x, y, zb + 2], RIB_R - P.RIB_PRESS, RIB_R), vcyl([x, y], zb + 2, ZD0, RIB_R),
@@ -390,7 +382,7 @@ export function model(P) {
       box(-W - 1, sy - P.SMA_HOLE_D / 2, sz, 1, sy + P.SMA_HOLE_D / 2, (J ? top : IH) + 1),
       ...(P.SMA_WALL < W ? [smaRecess([sy, sz])] : [])]));
 
-  // Shelf: 따로 출력하는 격판(판을 아래로). 통 기둥 턱·멈춤턱·누름 리브 윗면(ZD0)에 얹는다. 자석: 뚜껑을 닫으면 C6L 이 누름 받침을 눌러 고정
+  // Shelf: 따로 출력하는 격판(판을 아래로). 통 기둥 턱·누름 리브 윗면(ZD0)에 얹는다. 자석: 뚜껑을 닫으면 C6L 이 누름 받침을 눌러 고정
   // 볼트: 격판 위 기둥(뚜껑 밑 기둥까지)을 격판이 갖고 귀퉁이가 통 기둥 윗면에 얹혀, 바닥 볼트가 바닥·통·격판·뚜껑을 함께 조인다
   const shelf = sub(add(plug(ZD0, ZD1), ...(B ? L.cols.map(c => column(c, ZD1 - 0.1, colTop, plug(ZD1 - 0.1, colTop), cr - SHELF_SH)) : []),
       ...L.c6lPads.filter(p => !usbHoles.some(r => overlap(sq(p, P.C6L_PAD_D), r))).map(p => vcyl(p, ZD1 - 0.1, IH - C6L.T + P.C6L_PRESS, P.C6L_PAD_D / 2)),
@@ -416,9 +408,9 @@ export function model(P) {
     // 손가락 홈(바깥에서만, 안쪽 0.8 남김)은 이음선의 높은 쪽 부품에 — 바닥이 낮으면 통에 파서 바닥 벽 윗모서리를 손끝으로 당긴다
     const notch = cyl([IX / 2, -W - 1, ZS], [IX / 2, -0.8, ZS], P.NOTCH_R), notchInBody = ZS + P.FLOOR < ZD0 - ZS;
     if (notchInBody && !B) body.c.push(notch);
-    // Cover: 바닥판 + 벽(ZS) + 기둥 자석 자리 + 멈춤턱 아랫부분
+    // Cover: 바닥판 + 벽(ZS) + 기둥 자석 자리
     cover = sub(ZS > 0.5
-      ? add(sub(slab(-P.FLOOR - 1, ZS), cav(0, ZS + 1)), ...L.cols.map(c => column(c, -0.5, ZS)), ...L.stops.map(r => rect(r, -0.5, ZS)))
+      ? add(sub(slab(-P.FLOOR - 1, ZS), cav(0, ZS + 1)), ...L.cols.map(c => column(c, -0.5, ZS)))
       : slab(-P.FLOOR - 1, ZS), ...L.cols.flatMap(coverFix), ...(notchInBody || B ? [] : [notch]));
   }
 
