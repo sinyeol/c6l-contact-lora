@@ -28,7 +28,7 @@ const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } ca
 const CENTER = { C6L_Y: 'y', PCB_CX: 'x', PCB_CY: 'y', USBC_CX: 'x', USBC_CY: 'y', USBW_CX: 'x', USBW_CY: 'y', PULL_X: 'x', PULL_Y: 'y' };
 // 지금 고른 방식에서 쓰이지 않는 항목(없으면 늘 씀) — 사이드바에서 숨긴다
 const usb = (...m) => P => m.includes(P.USB_MODE), fitted = P => P.JOINT === 1, mag = P => P.COVER_FIX !== 1, cap = P => P.BTN_CAP === 1;
-const USE = { BTN_PROUD: P => !cap(P), CAP_PROUD: cap, CAP_TOP_T: cap, CAP_FL_T: cap, CAP_FL_W: cap, CAP_CLR: cap, STEM_D: cap, MAG_D: mag, MAG_T: mag, FIT: fitted, PLATE_R: fitted, EDGE_R: fitted, PULL_X: fitted, PULL_Y: fitted, PULL_DIR: fitted,
+const USE = { BTN_PROUD: P => !cap(P), CAP_PROUD: cap, CAP_TOP_T: cap, CAP_FL_T: cap, CAP_FL_W: cap, CAP_CLR: cap, STEM_D: cap, MAG_D: mag, MAG_T: mag, FIT: fitted, PLATE_R: fitted, EDGE_R: fitted, PULL_X: P => fitted(P) && mag(P), PULL_Y: P => fitted(P) && mag(P), PULL_DIR: P => fitted(P) && mag(P), NOTCH_R: mag,
   USBC_CX: usb(0, 2, 3), USBC_CY: usb(0, 2, 3), USBC_ROT: usb(0, 2, 3), USBW_CX: usb(3), USBW_CY: usb(3), USBW_T: usb(3),
   USBC_SLOT_W: usb(0, 3), USBC_SLOT_T: usb(0, 3), CBL_L: usb(2, 3), CBL_W: usb(2, 3), PLUG_L: usb(2), INS2_HOLE: usb(0, 3), INS2_L: usb(0, 3) };
 const UI_KEY = 'c6lcase.ui.closed', SAVED_KEY = 'c6lcase.saved';
@@ -190,7 +190,7 @@ function topSvg(L) {
   for (const [sy] of L.sma) s += rect([-W, sy - P.ANT_D / 2, -P.SMA_WALL, sy + P.ANT_D / 2], 'cut');
   const pl = L.pull, a0 = Math.atan2(pl.v[1], pl.v[0]), moon = Array.from({ length: 19 }, (_, i) => a0 - Math.PI / 2 + i * Math.PI / 18)
     .map(t => `${pl.c[0] + pl.r * Math.cos(t)},${fy(pl.c[1] + pl.r * Math.sin(t))}`).join(' ');
-  s += P.JOINT === 1 ? `<g data-drag="pull"><polygon class="part pull" points="${moon}"/>${lbl(pl.c[0], (pl.box[1] + pl.box[3]) / 2 - 1, '손가락 구멍(바닥)')}</g>`
+  if (P.COVER_FIX !== 1) s += P.JOINT === 1 ? `<g data-drag="pull"><polygon class="part pull" points="${moon}"/>${lbl(pl.c[0], (pl.box[1] + pl.box[3]) / 2 - 1, '손가락 구멍(바닥)')}</g>`
     : rect([L.IX / 2 - P.NOTCH_R, -W - 0.3, L.IX / 2 + P.NOTCH_R, -0.8], 'cut') + lbl(L.IX / 2, -W - 4, '손가락 홈(바닥)');
   s += lbl(mx, my + wy + o + 1.5, 'OLED') + lbl(-W - 5, L.sma[1][0] + 6, '안테나');
   s += dimH(-W, L.IX + W, -10, fy, `${n1(ox)}`) + '</svg>';
@@ -213,8 +213,8 @@ function secSvg(L) {
   s += J ? rect(e0, -P.FLOOR, e1, 0, 'cover') + rect(-W, -P.FLOOR, 0, top, 'wall') + rect(IX, -P.FLOOR, IX + W, top, 'wall')
     : rect(-W, -P.FLOOR, IX + W, 0, 'cover') + rect(-W, 0, 0, ZS, 'cover') + rect(IX, 0, IX + W, ZS, 'cover') + rect(-W, ZS, 0, IH, 'wall') + rect(IX, ZS, IX + W, IH, 'wall');
   s += rect(P.FIT, ZD0, IX - P.FIT, ZD1, 'shelf');
-  const cT = IH - L.lidBoss, hc = P.COL_D / 2;
-  for (const [x] of [L.cols[0], L.cols[1]]) s += rect(x - hc, 0, x + hc, ZS, 'cover') + rect(x - hc, ZS, x + hc, cT, 'boss')
+  const cT = IH - L.lidBoss, hc = P.COL_D / 2, B = P.COVER_FIX === 1;
+  for (const [x] of [L.cols[0], L.cols[1]]) s += rect(x - hc, 0, x + hc, ZS, 'cover') + rect(x - hc, ZS, x + hc, B ? ZD0 : cT, 'boss') + (B ? rect(x - hc, ZD0, x + hc, cT, 'shelf') : '')
     + (P.COVER_FIX === 1   // 볼트: 뚜껑 밑 기둥(인서트) + 관통 구멍 + 바닥 밑 머리 자리
       ? rect(x - hc, cT, x + hc, IH, 'lidp') + rect(x - M3_CLEAR / 2, -P.FLOOR, x + M3_CLEAR / 2, cT, 'cut')
         + rect(x - P.LID_CB_D / 2, -P.FLOOR, x + P.LID_CB_D / 2, -P.FLOOR + P.LID_CB_H, 'cut') + rect(x - P.INS3_HOLE / 2, cT, x + P.INS3_HOLE / 2, cT + P.INS3_L, 'mag')
