@@ -16,6 +16,7 @@ export const USBC = { FL: 20, FH: 7, FT: 1, HOLE_P: 16.5, BODY_L: 5.3, BODY_W: 9
 const USBW_RIB = 6, USBW_RIB_T = 3;   // 세운 받침벽 뒷면 양끝 리브(길이·두께) — 플러그를 꽂을 때 미는 힘을 받는다
 export const M3_CLEAR = 3.4;
 const RIB_R = 1.5;   // 배터리 누름 리브 끝 반지름
+const SEAT_W = 1.2;   // 끼움형 바닥판 평면 받침: 통 기둥이 벽을 따라 이 폭으로 z=0 까지 내려와 바닥판 귀퉁이 윗면을 받는다
 const SHELF_SH = 1.2;   // 격판 받침 턱: 통 기둥이 격판 위에서 이만큼 가늘어진다
 const C6L_HEAD_D = 8;   // C6L 고정 볼트 머리·와셔(M3 Ø7) 자리 — 격판에 뚫는 구멍 지름
 const ANT_HUB = 12;  // 휩 안테나 나사·꺾임 마디 길이(사진 비례)
@@ -348,6 +349,7 @@ export function model(P) {
   // 끼움 판(귀퉁이 rP − FIT, 바깥면 둘레 테두리 rt/rb)과 통 구멍(귀퉁이 rP)
   const plate = (z0, z1, rt, rb) => ({ t: 'rslab', p: [P.FIT, P.FIT, z0, IX - P.FIT, IY - P.FIT, z1], R: Math.max(L.rP - P.FIT, 0.3), rt, rb });
   const hole = (z0, z1) => rbox(0, 0, z0, IX, IY, z1, L.rP);
+  const inset = (d, z0, z1) => rbox(d, d, z0, IX - d, IY - d, z1, Math.max(ri - d, 0.3));   // 안쪽 공간을 d 만큼 줄인 것
   // 모서리 기둥: 원기둥을 벽 쪽으로 밀어 겹쳐 벽과 한 덩어리로, 안쪽 공간으로 잘라낸다
   // clip: 통 기둥은 안쪽 공간보다 0.05 크게 잘라 벽과 살짝 겹친다(곡면이 딱 맞닿으면 부피 0 조각이 떨어져 나온다), 바닥 기둥은 끼우는 판 윤곽으로
   const column = ([x, y], z0, z1, clip = rbox(-0.05, -0.05, z0, IX + 0.05, IY + 0.05, z1, ri + 0.05), r = cr) => {
@@ -373,7 +375,7 @@ export function model(P) {
   const smaRecess = ([sy, sz]) => cyl([-W - 1, sy, sz], [-P.SMA_WALL, sy, sz], P.ANT_D / 2);
   const body = sub(
     add(J ? sub(slab(-P.FLOOR - 1, top + 1), cav(-0.5, IH + 0.5), hole(-P.FLOOR - 2, 0), hole(IH, top + 2)) : sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
-      ...L.cols.flatMap(c => [...(ZS < ZD0 ? [J ? and(column(c, L.zCone, ZD0), cone(c, L.zCone, ZD0 + 1)) : column(c, ZS, ZD0)] : []),
+      ...L.cols.flatMap(c => [...(ZS < ZD0 ? J ? [and(column(c, L.zCone, ZD0), cone(c, L.zCone, ZD0 + 1)), sub(column(c, 0, ZD0), inset(SEAT_W, -1, ZD0 + 1))] : [column(c, ZS, ZD0)] : []),
         ...(B ? [] : [column(c, Math.max(ZD0 - 0.2, ZS), colTop, undefined, cr - SHELF_SH)])]),
       // 멈춤턱: 끼움형은 밑이 떠 있어 벽 쪽 끝에 꼭짓점을 둔 45° 원뿔 안만 남긴다(벽에서 비스듬히 자라 격판 높이에서 다 찬다)
       ...(zb < ZD0 ? L.stops.map(r => { const ax = [(r[0] + r[2]) / 2, r[1] < 0 ? 0 : IY];
@@ -406,7 +408,8 @@ export function model(P) {
     // Cover: 통 아랫구멍에 끼우는 판 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
     cover = sub(add(and(env, plate(-P.FLOOR, 0, 0, L.eC)), ...(ZS > 0.5 ? L.cols.map(c => {
       const z1 = Math.min(ZS + 1.5, ZD0 - 0.5);   // 원뿔 자리 바깥 테두리는 얇아지므로 ZS + 1.5 에서 자른다
-      return sub(column(c, -0.5, z1, plug(-0.5, z1)), cone(c, L.zCone - P.FIT * Math.SQRT2, z1 + 1));
+      // 높이는 평면 받침(벽 쪽 SEAT_W 띠)이 정하고, 원뿔 면은 FIT 만큼 띄워 닿지 않는다(45° 면은 출력 오차가 높이로 √2 배)
+      return sub(column(c, -0.5, z1, inset(SEAT_W + P.FIT, -0.5, z1)), cone(c, L.zCone - P.FIT * Math.SQRT2, z1 + 1));
     }) : [])),
       ...L.cols.flatMap(coverFix), ...pull);
   } else {
