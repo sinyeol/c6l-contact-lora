@@ -120,7 +120,6 @@ export function layout(P) {
   L.cap = P.BTN_CAP ? { r: P.BTN_HOLE_D / 2 - P.CAP_CLR, rf: P.BTN_HOLE_D / 2 + P.CAP_FL_W, rr: P.BTN_HOLE_D / 2 + P.CAP_FL_W + P.CAP_CLR, rs: P.STEM_D / 2 + 0.15 } : null;
   L.IH = L.ZD1 + Math.max(C6L.T, L.PCB_GAP + PCB.T + P.UNDER_PCB) + 0.5;
   L.ZS = Math.min(Math.max(P.SEAM_H, 0), L.ZD0);        // 바닥-통 이음 높이
-  L.zCone = L.ZS - P.COL_D / 2 * Math.SQRT2;            // 끼움형 통 기둥 밑 45° 원뿔 꼭짓점(안쪽 모서리) — 기둥 중심에서 바닥 기둥과 닿는 높이가 ZS
   const cr = P.COL_D / 2;
   L.cols = [[cr, cr], [IX - cr, cr], [IX - cr, IY - cr], [cr, IY - cr]];
   // 배터리 누름 리브(앞·뒤 벽 각 2개): 끝이 배터리 면을 RIB_PRESS 만큼 파고드는 세로 기둥 중심 [x, y, 벽 y]
@@ -292,13 +291,8 @@ export function check(P, L) {
   const rEdge = P.COVER_FIX === 1 ? L.rB : L.rT, flat = a < R ? (R - rEdge) - Math.hypot(R - a, R - a) : a - rEdge;
   if (flat < P.LID_CB_D / 2 + 0.2) warn(`${P.COVER_FIX === 1 ? '바닥' : '뚜껑'} 볼트 머리 자리가 둥근 테두리에 걸림 — ${P.COVER_FIX === 1 ? '아랫면' : '윗면'} R 을 줄이거나 기둥을 키울 것`);
   if (P.SEAM_H > L.ZD0) info(`바닥 기둥은 격판 밑(${L.ZD0}mm)까지만 — 그 값으로 맞춤`);
-  if (P.JOINT === 1) {
-    const need = (P.COL_D / 2 + P.FIT) * Math.SQRT2;
-    if (L.ZS < need) err(`바닥 기둥이 낮아 통 기둥 밑 45° 경사가 바닥판까지 내려옴 — 바닥 높이 ${need.toFixed(1)}mm 이상`);
-    else if (L.ZD0 - L.zCone < P.COL_D / 2 * (Math.SQRT2 + 1)) warn('격판 받침 턱 일부가 통 기둥 밑 경사에 걸림 — 바닥 높이를 낮추거나 배터리 칸을 높일 것');
-  }
   if (P.COVER_FIX !== 1 && P.COL_D / 2 - SHELF_SH - P.INS3_HOLE / 2 < 1.2) err('격판 위 통 기둥(받침 턱만큼 가늘어짐)의 인서트 벽이 1.2mm 보다 얇음 — 모서리 기둥 지름을 키울 것');
-  info(`격판은 따로 출력(판을 아래로) — ${P.COVER_FIX === 1 ? '통 기둥 윗면' : '통 기둥 턱'}${L.ribs.length ? '·누름 리브' : ''} 위에 얹고 ${P.COVER_FIX === 1 ? '귀퉁이 기둥을 관통하는 바닥 볼트로 조인다' : '뚜껑을 닫으면 C6L 누름 받침으로 눌린다'}. 통·뚜껑(뒤집어)·바닥·격판 모두 서포트 없이`);
+  info(`격판은 따로 출력(판을 아래로) — ${P.COVER_FIX === 1 ? '통 기둥 윗면' : '통 기둥 턱'}${L.ribs.length ? '·누름 리브' : ''} 위에 얹고 ${P.COVER_FIX === 1 ? '귀퉁이 기둥을 관통하는 바닥 볼트로 조인다' : '뚜껑을 닫으면 C6L 누름 받침으로 눌린다'}. ${P.JOINT === 1 && L.ZS > 0.5 ? '통은 모서리 기둥 밑(평평한 면, 바닥 위 ' + L.ZS + 'mm)에만 서포트, 뚜껑(뒤집어)·바닥·격판은 서포트 없이' : '통·뚜껑(뒤집어)·바닥·격판 모두 서포트 없이'}`);
   if (P.JOINT !== 1 && L.ribs.length && L.ZD0 - L.ZS <= 3) info('바닥 벽이 높아 통에 배터리 누름 리브 자리가 없음 — 리브를 넣으려면 바닥 높이를 낮출 것');
   return W;
 }
@@ -351,32 +345,23 @@ export function model(P) {
     const dx = x < IX / 2 ? -cr : cr, dy = y < IY / 2 ? -cr : cr;
     return and(add(...[[0, 0], [dx, 0], [0, dy], [dx, dy]].map(([ox, oy]) => vcyl([x + ox, y + oy], z0, z1, r))), clip);
   };
-  // 끼움형 통 기둥 밑: 안쪽 모서리에 꼭짓점을 둔 45° 원뿔 안만 남겨 벽에서 비스듬히 자라 나온다(서포트 없음). 바닥 기둥은 같은 원뿔을 FIT 만큼 내려 파낸다
-  const corner = ([x, y]) => [x < IX / 2 ? 0 : IX, y < IY / 2 ? 0 : IY];
-  const cone = (c, z0, z1) => { const [qx, qy] = corner(c); return cyl([qx, qy, z0 + 0.05], [qx, qy, z1], 0.05, z1 - z0); };
-  // 원뿔 면(기둥 중심, 높이 ZS)에 수직인 자석 자리: 법선 n = 통 → 바닥 쪽
-  const tiltMag = (c, intoBody) => {
-    const [qx, qy] = corner(c), n = [Math.sign(c[0] - qx) / 2, Math.sign(c[1] - qy) / 2, -Math.SQRT1_2], k = intoBody ? -1 : 1;
-    const p0 = [c[0], c[1], ZS], deep = P.MAG_T + 0.2 + (intoBody ? 0 : P.FIT);
-    return cyl(p0.map((v, i) => v - k * n[i]), p0.map((v, i) => v + k * deep * n[i]), P.MAG_D / 2 + 0.1);
-  };
   const magnet = (c, zFace, up) => vcyl(c, up ? zFace - 1 : zFace - P.MAG_T - 0.2, up ? zFace + P.MAG_T + 0.2 : zFace + 1, P.MAG_D / 2 + 0.1);
   // 바닥 고정: 자석 = 통·바닥 기둥 맞닿는 면에 자석 자리, 볼트 = 관통 구멍 + 바닥 밑 머리 자리(통 기둥 윗부분 lidBoss 는 뚜껑이 갖는다)
   const B = P.COVER_FIX === 1, colTop = IH - L.lidBoss;
-  const coverFix = c => B ? [vcyl(c, -P.FLOOR - 1, ZS + 2, M3_CLEAR / 2), vcyl(c, -P.FLOOR - 1, -P.FLOOR + P.LID_CB_H, P.LID_CB_D / 2)] : [J ? tiltMag(c, false) : magnet(c, ZS, false)];
+  const coverFix = c => B ? [vcyl(c, -P.FLOOR - 1, ZS + 2, M3_CLEAR / 2), vcyl(c, -P.FLOOR - 1, -P.FLOOR + P.LID_CB_H, P.LID_CB_D / 2)] : [magnet(c, ZS, false)];
 
   // Body: 벽(끼움형: 바닥~윗면, 적층형: ZS~IH) + 기둥(위 = M3 인서트·뚜껑 받침, 아래 = 자석, 격판 높이에서 SHELF_SH 만큼 가늘어져 격판 받침 턱) + 누름 리브
   const u = L.usbc, st = u.stand, usbHoles = u.mode === 0 ? [u.flange] : u.mode === 2 ? [u.cable] : u.mode === 3 ? [u.cable, st.foot] : [];
   const smaRecess = ([sy, sz]) => cyl([-W - 1, sy, sz], [-P.SMA_WALL, sy, sz], P.ANT_D / 2);
   const body = sub(
     add(J ? sub(slab(-P.FLOOR - 1, top + 1), cav(-0.5, IH + 0.5), hole(-P.FLOOR - 2, 0), hole(IH, top + 2)) : sub(slab(ZS, IH), cav(ZS - 1, IH + 1)),
-      ...L.cols.flatMap(c => [...(ZS < ZD0 ? J ? [and(column(c, L.zCone, ZD0), cone(c, L.zCone, ZD0 + 1)), sub(column(c, 0, ZD0), inset(SEAT_W, -1, ZD0 + 1))] : [column(c, ZS, ZD0)] : []),
+      ...L.cols.flatMap(c => [...(ZS < ZD0 ? [J ? sub(column(c, 0, ZD0), inset(SEAT_W, -1, ZS)) : column(c, ZS, ZD0)] : []),
         ...(B ? [] : [column(c, Math.max(ZD0 - 0.2, ZS), colTop, undefined, cr - SHELF_SH)])]),
       // 누름 리브: 아래 2mm 는 가늘게(조임 0) 시작해 배터리가 걸리지 않고 들어간다. 벽까지 판으로 이어 한 덩어리로
       ...(ZD0 - zb > 3 ? L.ribs.flatMap(([x, y, wy]) => [
         cyl([x, y, zb], [x, y, zb + 2], RIB_R - P.RIB_PRESS, RIB_R), vcyl([x, y], zb + 2, ZD0, RIB_R),
         box(x - RIB_R, Math.min(y, wy), zb, x + RIB_R, Math.max(y, wy), ZD0)]) : [])),
-    ...L.cols.flatMap(c => B ? [vcyl(c, Math.min(ZS, L.zCone) - 1, IH + 1, M3_CLEAR / 2)] : [vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2), J ? tiltMag(c, true) : magnet(c, ZS, true)]),
+    ...L.cols.flatMap(c => B ? [vcyl(c, ZS - 1, IH + 1, M3_CLEAR / 2)] : [vcyl(c, IH - P.INS3_L - 0.5, IH + 1, P.INS3_HOLE / 2), magnet(c, ZS, true)]),
     ...L.sma.flatMap(([sy, sz]) => [            // -X 벽: 위가 열린 SMA 홈(끼움형: 뚜껑 혀가 윗부분을 메움) + 바깥에서 안테나 지름만큼 파서 벽을 얇게
       cyl([-W - 1, sy, sz], [1, sy, sz], P.SMA_HOLE_D / 2),
       box(-W - 1, sy - P.SMA_HOLE_D / 2, sz, 1, sy + P.SMA_HOLE_D / 2, (J ? top : IH) + 1),
@@ -399,9 +384,9 @@ export function model(P) {
     const pull = B ? [] : [and(add(vcyl([px, py], -P.FLOOR - 1, 1, r), cyl([px, py, -P.FLOOR - 1], [px, py, -P.FLOOR + 0.8], r + 1.8, r)), half)];   // 반달 + 바깥 모서리 0.8 모따기
     // Cover: 통 아랫구멍에 끼우는 판 + 모서리 자석 기둥(0~ZS, 통 기둥 밑면과 자석끼리 붙음)
     cover = sub(add(and(env, plate(-P.FLOOR, 0, 0, L.eC)), ...(ZS > 0.5 ? L.cols.map(c => {
-      const z1 = Math.min(ZS + 1.5, ZD0 - 0.5);   // 원뿔 자리 바깥 테두리는 얇아지므로 ZS + 1.5 에서 자른다
-      // 높이는 평면 받침(벽 쪽 SEAT_W 띠)이 정하고, 원뿔 면은 FIT 만큼 띄워 닿지 않는다(45° 면은 출력 오차가 높이로 √2 배)
-      return sub(column(c, -0.5, z1, inset(SEAT_W + P.FIT, -0.5, z1)), cone(c, L.zCone - P.FIT * Math.SQRT2, z1 + 1));
+      // 윗면은 평평하게 ZS − FIT: 높이는 평면 받침(벽 쪽 SEAT_W 띠)이 정하고, 통 기둥 밑면(서포트 자국)과는 FIT 만큼 띄운다
+      const z1 = ZS - P.FIT;
+      return column(c, -0.5, z1, inset(SEAT_W + P.FIT, -0.5, z1));
     }) : [])),
       ...L.cols.flatMap(coverFix), ...pull);
   } else {
